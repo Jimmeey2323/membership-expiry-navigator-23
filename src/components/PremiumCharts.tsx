@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import {
 } from "lucide-react";
 
 interface PremiumChartsProps {
-  membershipData: MembershipData[];
+  data: MembershipData[];
 }
 
 const PREMIUM_COLORS = {
@@ -25,15 +26,11 @@ const PREMIUM_COLORS = {
   ]
 };
 
-export const PremiumCharts = ({ membershipData }: PremiumChartsProps) => {
+export const PremiumCharts = ({ data }: PremiumChartsProps) => {
   const [activeChart, setActiveChart] = useState<'overview' | 'revenue' | 'engagement' | 'trends'>('overview');
 
-  // Add null checking and provide default empty array
-  const safeData = membershipData || [];
-  console.log('PremiumCharts received data:', safeData.length, 'items');
-
-  // Data processing with null checking
-  const statusData = safeData.reduce((acc, member) => {
+  // Data processing
+  const statusData = data.reduce((acc, member) => {
     acc[member.status] = (acc[member.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -44,7 +41,7 @@ export const PremiumCharts = ({ membershipData }: PremiumChartsProps) => {
     color: PREMIUM_COLORS.primary[index % PREMIUM_COLORS.primary.length]
   }));
 
-  const membershipTypeData = safeData.reduce((acc, member) => {
+  const membershipTypeData = data.reduce((acc, member) => {
     const shortName = member.membershipName.length > 20 
       ? member.membershipName.substring(0, 20) + '...' 
       : member.membershipName;
@@ -56,7 +53,7 @@ export const PremiumCharts = ({ membershipData }: PremiumChartsProps) => {
     .map(([name, count]) => ({ name, count, fullName: name }))
     .slice(0, 8);
 
-  const locationData = safeData.reduce((acc, member) => {
+  const locationData = data.reduce((acc, member) => {
     if (member.location && member.location !== '-') {
       acc[member.location] = (acc[member.location] || 0) + 1;
     }
@@ -77,7 +74,7 @@ export const PremiumCharts = ({ membershipData }: PremiumChartsProps) => {
     { month: 'Jun', active: 185, expired: 24, new: 48, revenue: 67000, engagement: 91 }
   ];
 
-  const sessionsData = safeData.reduce((acc, member) => {
+  const sessionsData = data.reduce((acc, member) => {
     const range = member.sessionsLeft === 0 ? '0' :
                  member.sessionsLeft <= 5 ? '1-5' :
                  member.sessionsLeft <= 10 ? '6-10' :
@@ -349,11 +346,11 @@ export const PremiumCharts = ({ membershipData }: PremiumChartsProps) => {
   };
 
   const getChartStats = () => {
-    const totalMembers = safeData.length;
-    const activeMembers = safeData.filter(m => m.status === 'Active').length;
-    const totalSessions = safeData.reduce((sum, m) => sum + m.sessionsLeft, 0);
-    const avgSessions = totalMembers > 0 ? Math.round(totalSessions / totalMembers) : 0;
-    const activeRate = totalMembers > 0 ? Math.round((activeMembers / totalMembers) * 100) : 0;
+    const totalMembers = data.length;
+    const activeMembers = data.filter(m => m.status === 'Active').length;
+    const totalSessions = data.reduce((sum, m) => sum + m.sessionsLeft, 0);
+    const avgSessions = Math.round(totalSessions / totalMembers);
+    const activeRate = Math.round((activeMembers / totalMembers) * 100);
     const revenueProjection = totalMembers * 89; // Average monthly fee simulation
 
     return [

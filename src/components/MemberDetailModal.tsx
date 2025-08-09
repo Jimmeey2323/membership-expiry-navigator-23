@@ -1,25 +1,23 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { MembershipData } from "@/types/membership";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { 
-  User, Mail, MapPin, Calendar, Clock, CreditCard, 
-  MessageSquare, FileText, Tag, Plus, Save, X
+  X, Plus, Save, User, Mail, Calendar, MapPin, 
+  Activity, CreditCard, MessageSquare, FileText, 
+  Tag, Clock, TrendingUp, AlertCircle, Star,
+  Phone, Building, Users
 } from "lucide-react";
-
-interface Comment {
-  id: string;
-  text: string;
-  timestamp: Date;
-  type: "comment" | "note";
-}
+import { MembershipData } from "@/types/membership";
+import { googleSheetsService } from "@/services/googleSheets";
+import { toast } from "sonner";
 
 interface MemberDetailModalProps {
   member: MembershipData | null;
@@ -28,269 +26,507 @@ interface MemberDetailModalProps {
   onSave: (memberId: string, comments: string, notes: string, tags: string[]) => void;
 }
 
-export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDetailModalProps) => {
-  const [comments, setComments] = useState(member?.comments || "");
-  const [notes, setNotes] = useState(member?.notes || "");
-  const [tags, setTags] = useState<string[]>(member?.tags || []);
-  const [newTag, setNewTag] = useState("");
+interface Comment {
+  id: string;
+  text: string;
+  timestamp: Date;
+  type: 'comment' | 'note';
+}
 
-  if (!member) return null;
+export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDetailModalProps) => {
+  const [comments, setComments] = useState<Comment[]>(() => {
+    if (member?.comments) {
+      return [{ id: '1', text: member.comments, timestamp: new Date(), type: 'comment' as const }];
+    }
+    return [];
+  });
+  
+  const [notes, setNotes] = useState<Comment[]>(() => {
+    if (member?.notes) {
+      return [{ id: '1', text: member.notes, timestamp: new Date(), type: 'note' as const }];
+    }
+    return [];
+  });
+  
+  const [tags, setTags] = useState<string[]>(member?.tags || []);
+  const [newComment, setNewComment] = useState('');
+  const [newNote, setNewNote] = useState('');
+  const [newTag, setNewTag] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+
+  const getDaysUntilExpiry = (endDate: string) => {
+    const today = new Date();
+    const expiry = new Date(endDate);
+    const diffTime = expiry.getTime() - today.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const addComment = () => {
+    if (!newComment.trim()) return;
+    const comment: Comment = {
+      id: Date.now().toString(),
+      text: newComment,
+      timestamp: new Date(),
+      type: 'comment' as const
+    };
+    setComments(prev => [...prev, comment]);
+    setNewComment('');
+  };
+
+  const addNote = () => {
+    if (!newNote.trim()) return;
+    const note: Comment = {
+      id: Date.now().toString(),
+      text: newNote,
+      timestamp: new Date(),
+      type: 'note' as const
+    };
+    setNotes(prev => [...prev, note]);
+    setNewNote('');
+  };
 
   const addTag = () => {
-    if (newTag.trim() && !tags.includes(newTag.trim())) {
-      setTags([...tags, newTag.trim()]);
-      setNewTag("");
-    }
+    if (!newTag.trim() || tags.includes(newTag.trim())) return;
+    setTags(prev => [...prev, newTag.trim()]);
+    setNewTag('');
   };
 
   const removeTag = (tagToRemove: string) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
+    setTags(prev => prev.filter(tag => tag !== tagToRemove));
   };
 
-  const handleSave = () => {
-    onSave(member.memberId, comments, notes, tags);
-    onClose();
+  const removeComment = (id: string) => {
+    setComments(prev => prev.filter(c => c.id !== id));
   };
 
-  const mockComments: Comment[] = [
-    { id: "1", text: "Initial consultation completed", timestamp: new Date("2024-01-15"), type: "comment" as const },
-    { id: "2", text: "Prefers morning classes", timestamp: new Date("2024-01-20"), type: "note" as const },
-    { id: "3", text: "Interested in personal training", timestamp: new Date("2024-02-01"), type: "comment" as const }
-  ];
+  const removeNote = (id: string) => {
+    setNotes(prev => prev.filter(n => n.id !== id));
+  };
 
-  const mockNotes: Comment[] = [
-    { id: "4", text: "Has lower back issues - recommend modifications", timestamp: new Date("2024-01-18"), type: "note" as const },
-    { id: "5", text: "Very motivated and consistent", timestamp: new Date("2024-01-25"), type: "note" as const }
-  ];
+  const handleSave = async () => {
+    if (!member) return;
+    
+    setIsSaving(true);
+    try {
+      const allComments = comments.map(c => c.text).join('\n---\n');
+      const allNotes = notes.map(n => n.text).join('\n---\n');
+      
+      await googleSheetsService.saveAnnotation(
+        member.memberId,
+        member.email,
+        allComments,
+        allNotes,
+        tags
+      );
+      
+      onSave(member.memberId, allComments, allNotes, tags);
+      toast.success("Member details saved successfully!");
+      onClose();
+    } catch (error) {
+      console.error('Error saving member details:', error);
+      toast.error("Failed to save member details. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!member) return null;
+
+  const daysUntilExpiry = getDaysUntilExpiry(member.endDate);
+  const isExpiringSoon = daysUntilExpiry <= 30 && daysUntilExpiry > 0;
+  const isExpired = member.status === 'Expired';
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold flex items-center gap-3">
-            <div className="p-2 bg-blue-500 text-white rounded-lg">
-              <User className="h-5 w-5" />
-            </div>
-            {member.firstName} {member.lastName}
-          </DialogTitle>
-        </DialogHeader>
-
-        <Tabs defaultValue="overview" className="h-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="membership">Membership Details</TabsTrigger>
-            <TabsTrigger value="annotations">Notes & Tags</TabsTrigger>
-          </TabsList>
-
-          <div className="overflow-y-auto max-h-[70vh] mt-4">
-            <TabsContent value="overview" className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      Contact Information
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <p><strong>Email:</strong> {member.email}</p>
-                    <p><strong>Member ID:</strong> {member.memberId}</p>
-                    <p><strong>Location:</strong> {member.location}</p>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-800 border-2">
+        <div className="flex flex-col h-full">
+          {/* Premium Header */}
+          <div className="relative bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white p-8 pb-12">
+            <div className="absolute inset-0 bg-black/10 backdrop-blur-sm"></div>
+            <div className="relative z-10">
+              <DialogHeader>
+                <div className="flex items-center justify-between">
+                  <DialogTitle className="flex items-center gap-4 text-2xl font-bold">
+                    <Avatar className="h-16 w-16 border-4 border-white/20 shadow-2xl">
+                      <AvatarFallback className="text-2xl font-bold text-blue-600 bg-white">
+                        {member.firstName.charAt(0)}{member.lastName.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="space-y-1">
+                      <h1 className="text-3xl font-bold tracking-tight">
+                        {member.firstName} {member.lastName}
+                      </h1>
+                      <p className="text-blue-100 text-lg font-medium">
+                        Member #{member.memberId}
+                      </p>
+                    </div>
+                  </DialogTitle>
+                  <Button
+                    variant="ghost" 
+                    size="icon"
+                    onClick={onClose}
+                    className="text-white hover:bg-white/20 h-12 w-12"
+                  >
+                    <X className="h-6 w-6" />
+                  </Button>
+                </div>
+              </DialogHeader>
+              
+              {/* Status Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
+                <Card className="bg-white/10 backdrop-blur-md border-white/20 text-white">
+                  <CardContent className="p-4 text-center">
+                    <div className="flex items-center justify-center mb-2">
+                      <Activity className="h-6 w-6" />
+                    </div>
+                    <p className="text-2xl font-bold">{member.sessionsLeft}</p>
+                    <p className="text-sm text-blue-100">Sessions Left</p>
                   </CardContent>
                 </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      Status Information
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <strong>Status:</strong>
-                      <Badge variant={member.status === 'Active' ? "default" : "destructive"}>
+                
+                <Card className="bg-white/10 backdrop-blur-md border-white/20 text-white">
+                  <CardContent className="p-4 text-center">
+                    <div className="flex items-center justify-center mb-2">
+                      <Calendar className="h-6 w-6" />
+                    </div>
+                    <p className="text-2xl font-bold">{daysUntilExpiry}</p>
+                    <p className="text-sm text-blue-100">Days Left</p>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-white/10 backdrop-blur-md border-white/20 text-white">
+                  <CardContent className="p-4 text-center">
+                    <div className="flex items-center justify-center mb-2">
+                      <Badge 
+                        variant={member.status === 'Active' ? "default" : "destructive"}
+                        className="h-8 px-4 text-sm font-bold"
+                      >
                         {member.status}
                       </Badge>
                     </div>
-                    <p><strong>Sessions Left:</strong> {member.sessionsLeft}</p>
-                    <p><strong>Frozen:</strong> {member.frozen}</p>
+                    <p className="text-sm text-blue-100">Status</p>
                   </CardContent>
                 </Card>
-              </div>
-
-              {/* Display existing notes, comments and tags */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4" />
-                      Comments & Notes History
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 max-h-60 overflow-y-auto">
-                    {[...mockComments, ...mockNotes].map(item => (
-                      <div key={item.id} className="p-3 bg-muted rounded-lg">
-                        <div className="flex justify-between items-center mb-2">
-                          <Badge variant={item.type === 'comment' ? 'default' : 'secondary'}>
-                            {item.type}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {item.timestamp.toLocaleDateString()}
-                          </span>
-                        </div>
-                        <p className="text-sm">{item.text}</p>
-                      </div>
-                    ))}
-                    {member.comments && (
-                      <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-                        <div className="flex justify-between items-center mb-2">
-                          <Badge variant="default">Current Comment</Badge>
-                          <span className="text-xs text-muted-foreground">Current</span>
-                        </div>
-                        <p className="text-sm">{member.comments}</p>
-                      </div>
-                    )}
-                    {member.notes && (
-                      <div className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg">
-                        <div className="flex justify-between items-center mb-2">
-                          <Badge variant="secondary">Current Note</Badge>
-                          <span className="text-xs text-muted-foreground">Current</span>
-                        </div>
-                        <p className="text-sm">{member.notes}</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Tag className="h-4 w-4" />
-                      Tags
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {member.tags && member.tags.length > 0 ? (
-                        member.tags.map((tag, index) => (
-                          <Badge key={index} variant="outline" className="bg-green-50 dark:bg-green-950/30">
-                            {tag}
-                          </Badge>
-                        ))
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No tags assigned</p>
-                      )}
+                
+                <Card className="bg-white/10 backdrop-blur-md border-white/20 text-white">
+                  <CardContent className="p-4 text-center">
+                    <div className="flex items-center justify-center mb-2">
+                      <MapPin className="h-6 w-6" />
                     </div>
+                    <p className="text-sm font-semibold truncate">{member.location}</p>
+                    <p className="text-sm text-blue-100">Location</p>
                   </CardContent>
                 </Card>
               </div>
-            </TabsContent>
+            </div>
+          </div>
 
-            <TabsContent value="membership" className="space-y-4">
-              
-              <div className="grid grid-cols-2 gap-4">
-                <Card>
+          {/* Content Area */}
+          <div className="flex-1 overflow-auto p-8">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+              <TabsList className="grid w-full grid-cols-4 bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
+                <TabsTrigger value="overview" className="data-[state=active]:bg-white data-[state=active]:shadow-md font-semibold">
+                  <User className="h-4 w-4 mr-2" />
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="comments" className="data-[state=active]:bg-white data-[state=active]:shadow-md font-semibold">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Comments ({comments.length})
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="data-[state=active]:bg-white data-[state=active]:shadow-md font-semibold">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Notes ({notes.length})
+                </TabsTrigger>
+                <TabsTrigger value="tags" className="data-[state=active]:bg-white data-[state=active]:shadow-md font-semibold">
+                  <Tag className="h-4 w-4 mr-2" />
+                  Tags ({tags.length})
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="overview" className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Personal Information */}
+                  <Card className="shadow-lg border-2">
+                    <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700">
+                      <CardTitle className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-500 text-white rounded-lg">
+                          <User className="h-5 w-5" />
+                        </div>
+                        Personal Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-6">
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <Label className="text-sm font-semibold text-slate-600">First Name</Label>
+                          <p className="text-lg font-medium text-slate-900 dark:text-white">{member.firstName}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-semibold text-slate-600">Last Name</Label>
+                          <p className="text-lg font-medium text-slate-900 dark:text-white">{member.lastName}</p>
+                        </div>
+                      </div>
+                      <Separator />
+                      <div className="flex items-center gap-3">
+                        <Mail className="h-5 w-5 text-slate-500" />
+                        <div>
+                          <Label className="text-sm font-semibold text-slate-600">Email Address</Label>
+                          <p className="text-lg font-medium text-slate-900 dark:text-white">{member.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Building className="h-5 w-5 text-slate-500" />
+                        <div>
+                          <Label className="text-sm font-semibold text-slate-600">Location</Label>
+                          <p className="text-lg font-medium text-slate-900 dark:text-white">{member.location}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Membership Details */}
+                  <Card className="shadow-lg border-2">
+                    <CardHeader className="bg-gradient-to-r from-emerald-50 to-emerald-100 dark:from-emerald-800 dark:to-emerald-700">
+                      <CardTitle className="flex items-center gap-3">
+                        <div className="p-2 bg-emerald-500 text-white rounded-lg">
+                          <CreditCard className="h-5 w-5" />
+                        </div>
+                        Membership Details
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-6">
+                      <div>
+                        <Label className="text-sm font-semibold text-slate-600">Membership Type</Label>
+                        <p className="text-lg font-medium text-slate-900 dark:text-white">{member.membershipName}</p>
+                      </div>
+                      <Separator />
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <Label className="text-sm font-semibold text-slate-600">Start Date</Label>
+                          <p className="text-lg font-medium text-slate-900 dark:text-white">
+                            {new Date(member.orderDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-semibold text-slate-600">End Date</Label>
+                          <div className="flex items-center gap-2">
+                            <p className="text-lg font-medium text-slate-900 dark:text-white">
+                              {new Date(member.endDate).toLocaleDateString()}
+                            </p>
+                            {isExpiringSoon && (
+                              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                Expires Soon
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Activity className="h-5 w-5 text-slate-500" />
+                        <div>
+                          <Label className="text-sm font-semibold text-slate-600">Remaining Sessions</Label>
+                          <p className="text-2xl font-bold text-blue-600">{member.sessionsLeft}</p>
+                        </div>
+                      </div>
+                      {member.frozen && member.frozen.toLowerCase() === 'true' && (
+                        <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <AlertCircle className="h-5 w-5 text-blue-600" />
+                          <span className="text-blue-700 font-medium">Account is currently frozen</span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="comments" className="space-y-6">
+                <Card className="shadow-lg">
                   <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <CreditCard className="h-4 w-4" />
-                      Membership Details
-                    </CardTitle>
+                    <CardTitle>Add New Comment</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2">
-                    <p><strong>Type:</strong> {member.membershipName}</p>
-                    <p><strong>Start Date:</strong> {new Date(member.orderDate).toLocaleDateString()}</p>
-                    <p><strong>End Date:</strong> {new Date(member.endDate).toLocaleDateString()}</p>
-                    <p><strong>Sold By:</strong> {member.soldBy}</p>
+                  <CardContent className="space-y-4">
+                    <Textarea
+                      placeholder="Add a comment about this member..."
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      className="min-h-[100px]"
+                    />
+                    <Button onClick={addComment} disabled={!newComment.trim()}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Comment
+                    </Button>
                   </CardContent>
                 </Card>
 
-                <Card>
+                <div className="space-y-4">
+                  {comments.map((comment) => (
+                    <Card key={comment.id} className="shadow-md">
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 space-y-2">
+                            <p className="text-slate-900 dark:text-white">{comment.text}</p>
+                            <p className="text-sm text-slate-500">
+                              {comment.timestamp.toLocaleString()}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeComment(comment.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {comments.length === 0 && (
+                    <div className="text-center py-12 text-slate-500">
+                      <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No comments yet</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="notes" className="space-y-6">
+                <Card className="shadow-lg">
                   <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      Payment Information
-                    </CardTitle>
+                    <CardTitle>Add New Note</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2">
-                    <p><strong>Paid:</strong> {member.paid}</p>
-                    <p><strong>Membership ID:</strong> {member.membershipId}</p>
-                    <p><strong>Item ID:</strong> {member.itemId}</p>
+                  <CardContent className="space-y-4">
+                    <Textarea
+                      placeholder="Add an internal note..."
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      className="min-h-[100px]"
+                    />
+                    <Button onClick={addNote} disabled={!newNote.trim()}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Note
+                    </Button>
                   </CardContent>
                 </Card>
-              </div>
-            </TabsContent>
 
-            <TabsContent value="annotations" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Add/Edit Annotations</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="comments">Comments</Label>
-                    <Textarea
-                      id="comments"
-                      value={comments}
-                      onChange={(e) => setComments(e.target.value)}
-                      placeholder="Add comments about this member..."
-                      className="mt-1"
-                    />
-                  </div>
+                <div className="space-y-4">
+                  {notes.map((note) => (
+                    <Card key={note.id} className="shadow-md">
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 space-y-2">
+                            <p className="text-slate-900 dark:text-white">{note.text}</p>
+                            <p className="text-sm text-slate-500">
+                              {note.timestamp.toLocaleString()}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeNote(note.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {notes.length === 0 && (
+                    <div className="text-center py-12 text-slate-500">
+                      <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No notes yet</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
 
-                  <div>
-                    <Label htmlFor="notes">Notes</Label>
-                    <Textarea
-                      id="notes"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Add private notes..."
-                      className="mt-1"
-                    />
-                  </div>
-
-                  <div>
-                    <Label>Tags</Label>
-                    <div className="flex gap-2 mt-1">
+              <TabsContent value="tags" className="space-y-6">
+                <Card className="shadow-lg">
+                  <CardHeader>
+                    <CardTitle>Add New Tag</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex gap-2">
                       <Input
+                        placeholder="Enter a new tag..."
                         value={newTag}
                         onChange={(e) => setNewTag(e.target.value)}
-                        placeholder="Add a tag..."
                         onKeyPress={(e) => e.key === 'Enter' && addTag()}
+                        className="flex-1"
                       />
-                      <Button onClick={addTag} size="sm">
-                        <Plus className="h-4 w-4" />
+                      <Button onClick={addTag} disabled={!newTag.trim()}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Tag
                       </Button>
                     </div>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {tags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="flex items-center gap-1">
-                          {tag}
-                          <X 
-                            className="h-3 w-3 cursor-pointer" 
-                            onClick={() => removeTag(tag)}
-                          />
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
+                  </CardContent>
+                </Card>
 
-                  <Separator />
-                  
-                  <div className="flex gap-2 justify-end">
-                    <Button variant="outline" onClick={onClose}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSave}>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Changes
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                <Card className="shadow-lg">
+                  <CardHeader>
+                    <CardTitle>Current Tags</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {tags.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {tags.map((tag, index) => (
+                          <Badge 
+                            key={index} 
+                            variant="secondary" 
+                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 text-blue-800 border border-blue-200 hover:from-blue-100 hover:to-purple-100 transition-all duration-200"
+                          >
+                            <Star className="h-3 w-3" />
+                            {tag}
+                            <button
+                              onClick={() => removeTag(tag)}
+                              className="ml-2 hover:bg-destructive/20 rounded-full p-0.5 transition-colors"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-slate-500">
+                        <Tag className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No tags yet</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
-        </Tabs>
+
+          {/* Footer Actions */}
+          <div className="border-t bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-700 p-6">
+            <div className="flex justify-end gap-4">
+              <Button variant="outline" onClick={onClose} disabled={isSaving} size="lg">
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSave} 
+                disabled={isSaving} 
+                size="lg"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
