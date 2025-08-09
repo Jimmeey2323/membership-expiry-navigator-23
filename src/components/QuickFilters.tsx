@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -14,7 +13,9 @@ import {
   Filter,
   Sparkles,
   Zap,
-  Star
+  Star,
+  BarChart3,
+  AlertTriangle
 } from "lucide-react";
 
 interface QuickFiltersProps {
@@ -38,13 +39,31 @@ export const QuickFilters = ({
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
   
   const recentMembers = membershipData.filter(m => new Date(m.orderDate) >= thirtyDaysAgo);
   const weeklyMembers = membershipData.filter(m => new Date(m.orderDate) >= sevenDaysAgo);
+  const quarterlyMembers = membershipData.filter(m => new Date(m.orderDate) >= ninetyDaysAgo);
+  const halfYearMembers = membershipData.filter(m => new Date(m.orderDate) >= sixMonthsAgo);
+  
   const expiringThisMonth = membershipData.filter(m => {
     const endDate = new Date(m.endDate);
     return endDate >= now && endDate <= new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   });
+  
+  const expiringThisWeek = membershipData.filter(m => {
+    const endDate = new Date(m.endDate);
+    return endDate >= now && endDate <= new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  });
+
+  // High-value filters
+  const premiumMembers = membershipData.filter(m => 
+    m.membershipName && (m.membershipName.toLowerCase().includes('premium') || m.membershipName.toLowerCase().includes('unlimited'))
+  );
+  
+  const lowSessionMembers = membershipData.filter(m => m.sessionsLeft <= 2 && m.sessionsLeft > 0);
+  const highSessionMembers = membershipData.filter(m => m.sessionsLeft > 10);
 
   const filterGroups = [
     {
@@ -64,16 +83,36 @@ export const QuickFilters = ({
       icon: Calendar,
       gradient: "from-emerald-600 to-teal-600",
       filters: [
-        { key: 'recent', label: 'Last 30 Days', count: recentMembers.length, icon: TrendingUp, color: "from-blue-600 to-indigo-600" },
         { key: 'weekly', label: 'This Week', count: weeklyMembers.length, icon: Calendar, color: "from-green-600 to-emerald-600" },
-        { key: 'expiring', label: 'Expiring Soon', count: expiringThisMonth.length, icon: Clock, color: "from-yellow-600 to-amber-600" }
+        { key: 'recent', label: 'Last 30 Days', count: recentMembers.length, icon: TrendingUp, color: "from-blue-600 to-indigo-600" },
+        { key: 'quarterly', label: 'Last 90 Days', count: quarterlyMembers.length, icon: BarChart3, color: "from-purple-600 to-violet-600" },
+        { key: 'half-year', label: 'Last 6 Months', count: halfYearMembers.length, icon: Calendar, color: "from-cyan-600 to-blue-600" }
+      ]
+    },
+    {
+      title: "Expiration Alerts",
+      icon: AlertTriangle,
+      gradient: "from-red-600 to-orange-600",
+      filters: [
+        { key: 'expiring-week', label: 'Expiring This Week', count: expiringThisWeek.length, icon: AlertTriangle, color: "from-red-600 to-red-700" },
+        { key: 'expiring', label: 'Expiring This Month', count: expiringThisMonth.length, icon: Clock, color: "from-yellow-600 to-amber-600" },
+        { key: 'low-sessions', label: 'Low Sessions (≤2)', count: lowSessionMembers.length, icon: AlertTriangle, color: "from-orange-600 to-red-600" }
+      ]
+    },
+    {
+      title: "Member Value",
+      icon: Star,
+      gradient: "from-gold to-yellow-600",
+      filters: [
+        { key: 'premium', label: 'Premium Members', count: premiumMembers.length, icon: Star, color: "from-gold to-yellow-600" },
+        { key: 'high-sessions', label: 'High Sessions (>10)', count: highSessionMembers.length, icon: Zap, color: "from-green-600 to-emerald-600" }
       ]
     },
     {
       title: "Location Filters",
       icon: MapPin,
       gradient: "from-purple-600 to-pink-600",
-      filters: availableLocations.slice(0, 4).map((location, index) => ({
+      filters: availableLocations.slice(0, 6).map((location, index) => ({
         key: `location-${location}`,
         label: location.split(',')[0] || location,
         count: membershipData.filter(member => member.location === location).length,
@@ -82,26 +121,54 @@ export const QuickFilters = ({
           "from-violet-600 to-purple-600",
           "from-pink-600 to-rose-600", 
           "from-cyan-600 to-blue-600",
-          "from-lime-600 to-green-600"
-        ][index % 4]
+          "from-lime-600 to-green-600",
+          "from-indigo-600 to-purple-600",
+          "from-teal-600 to-cyan-600"
+        ][index % 6]
       }))
     }
   ];
 
+  const handleQuickFilterChange = (filterKey: string) => {
+    // Add special handling for new filters
+    switch (filterKey) {
+      case 'expiring-week':
+        onQuickFilterChange('expiring-week');
+        break;
+      case 'quarterly':
+        onQuickFilterChange('quarterly');
+        break;
+      case 'half-year':
+        onQuickFilterChange('half-year');
+        break;
+      case 'premium':
+        onQuickFilterChange('premium');
+        break;
+      case 'low-sessions':
+        onQuickFilterChange('low-sessions');
+        break;
+      case 'high-sessions':
+        onQuickFilterChange('high-sessions');
+        break;
+      default:
+        onQuickFilterChange(filterKey);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fade-in">
       {filterGroups.map((group, groupIndex) => (
-        <Card key={group.title} className="p-8 border-2 border-white/20 dark:border-slate-700/50 bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl shadow-2xl hover:shadow-3xl transition-all duration-500">
+        <Card key={group.title} className="premium-card p-8">
           <div className="flex items-center gap-4 mb-6">
             <div className={`p-3 rounded-2xl bg-gradient-to-r ${group.gradient} shadow-lg`}>
               <group.icon className="h-6 w-6 text-white" />
             </div>
             <div className="flex-1">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
                 {group.title}
                 <Sparkles className="h-4 w-4 text-yellow-500" />
               </h3>
-              <div className="w-24 h-1 bg-gradient-to-r from-slate-300 to-transparent dark:from-slate-600 rounded-full mt-1" />
+              <div className="w-24 h-1 bg-gradient-to-r from-muted-foreground/30 to-transparent rounded-full mt-1" />
             </div>
           </div>
           
@@ -110,11 +177,11 @@ export const QuickFilters = ({
               <Button
                 key={filter.key}
                 variant={quickFilter === filter.key ? "default" : "outline"}
-                onClick={() => onQuickFilterChange(filter.key)}
+                onClick={() => handleQuickFilterChange(filter.key)}
                 className={`group relative h-auto py-4 px-6 flex items-center gap-3 transition-all duration-300 border-2 font-semibold ${
                   quickFilter === filter.key 
                     ? `bg-gradient-to-r ${filter.color} text-white shadow-xl scale-105 border-transparent` 
-                    : 'border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700 hover:scale-105 hover:shadow-lg backdrop-blur-sm'
+                    : 'border-border bg-card hover:bg-muted hover:scale-105 hover:shadow-lg backdrop-blur-sm'
                 }`}
               >
                 {/* Premium glow effect for active buttons */}
@@ -141,7 +208,7 @@ export const QuickFilters = ({
                   className={`relative z-10 ml-1 transition-all duration-300 font-bold ${
                     quickFilter === filter.key 
                       ? 'bg-white/20 text-white border-white/30 shadow-sm' 
-                      : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600'
+                      : 'bg-muted border-border'
                   }`}
                 >
                   {filter.count}
