@@ -14,13 +14,7 @@ import {
   Filter,
   Sparkles,
   Zap,
-  Star,
-  Crown,
-  DollarSign,
-  AlertTriangle,
-  Activity,
-  Timer,
-  TrendingDown
+  Star
 } from "lucide-react";
 
 interface QuickFiltersProps {
@@ -44,38 +38,13 @@ export const QuickFilters = ({
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   
   const recentMembers = membershipData.filter(m => new Date(m.orderDate) >= thirtyDaysAgo);
   const weeklyMembers = membershipData.filter(m => new Date(m.orderDate) >= sevenDaysAgo);
-  
-  const expiringThisWeek = membershipData.filter(m => {
-    const endDate = new Date(m.endDate);
-    return endDate >= now && endDate <= nextWeek && m.status === 'Active';
-  });
-  
   const expiringThisMonth = membershipData.filter(m => {
     const endDate = new Date(m.endDate);
-    return endDate >= now && endDate <= nextMonth && m.status === 'Active';
+    return endDate >= now && endDate <= new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   });
-
-  // Session-based filters
-  const lowSessionMembers = membershipData.filter(m => m.sessionsLeft > 0 && m.sessionsLeft <= 3);
-  const mediumSessionMembers = membershipData.filter(m => m.sessionsLeft >= 4 && m.sessionsLeft <= 10);
-  const highSessionMembers = membershipData.filter(m => m.sessionsLeft > 10);
-
-  // Premium filters
-  const premiumMembers = membershipData.filter(m => 
-    m.membershipName && 
-    (m.membershipName.toLowerCase().includes('unlimited') || 
-     m.membershipName.toLowerCase().includes('premium'))
-  );
-
-  const highValueMembers = membershipData.filter(m => parseFloat(m.paid || '0') > 5000);
-  const unpaidMembers = membershipData.filter(m => 
-    !m.paid || m.paid === '-' || parseFloat(m.paid || '0') === 0
-  );
 
   const filterGroups = [
     {
@@ -91,45 +60,31 @@ export const QuickFilters = ({
       ]
     },
     {
-      title: "Churn Risk & Expiration Filters",
-      icon: TrendingDown,
-      gradient: "from-red-600 to-orange-600",
-      filters: [
-        { key: 'expiring-week', label: 'Expiring This Week', count: expiringThisWeek.length, icon: AlertTriangle, color: "from-red-600 to-red-700" },
-        { key: 'expiring-month', label: 'Expiring This Month', count: expiringThisMonth.length, icon: Timer, color: "from-orange-600 to-red-600" },
-        { key: 'low-sessions', label: 'Low Sessions (≤3)', count: lowSessionMembers.length, icon: TrendingDown, color: "from-yellow-600 to-orange-600" },
-        { key: 'unpaid', label: 'Unpaid Members', count: unpaidMembers.length, icon: DollarSign, color: "from-red-600 to-pink-600" }
-      ]
-    },
-    {
       title: "Period Filters",
       icon: Calendar,
       gradient: "from-emerald-600 to-teal-600",
       filters: [
         { key: 'recent', label: 'Last 30 Days', count: recentMembers.length, icon: TrendingUp, color: "from-blue-600 to-indigo-600" },
         { key: 'weekly', label: 'This Week', count: weeklyMembers.length, icon: Calendar, color: "from-green-600 to-emerald-600" },
-        { key: 'medium-sessions', label: 'Medium Sessions (4-10)', count: mediumSessionMembers.length, icon: Activity, color: "from-blue-600 to-purple-600" },
-        { key: 'high-sessions', label: 'High Sessions (>10)', count: highSessionMembers.length, icon: Zap, color: "from-green-600 to-teal-600" }
+        { key: 'expiring', label: 'Expiring Soon', count: expiringThisMonth.length, icon: Clock, color: "from-yellow-600 to-amber-600" }
       ]
     },
     {
-      title: "Premium & Value Filters",
-      icon: Crown,
-      gradient: "from-yellow-600 to-orange-600",
-      filters: [
-        { key: 'premium', label: 'Premium Members', count: premiumMembers.length, icon: Crown, color: "from-yellow-600 to-orange-600" },
-        { key: 'high-value', label: 'High Value (₹5K+)', count: highValueMembers.length, icon: DollarSign, color: "from-green-600 to-emerald-600" },
-        ...availableLocations.slice(0, 2).map((location, index) => ({
-          key: `location-${location}`,
-          label: location.split(',')[0] || location,
-          count: membershipData.filter(member => member.location === location).length,
-          icon: MapPin,
-          color: [
-            "from-violet-600 to-purple-600",
-            "from-cyan-600 to-blue-600"
-          ][index % 2]
-        }))
-      ]
+      title: "Location Filters",
+      icon: MapPin,
+      gradient: "from-purple-600 to-pink-600",
+      filters: availableLocations.slice(0, 4).map((location, index) => ({
+        key: `location-${location}`,
+        label: location.split(',')[0] || location,
+        count: membershipData.filter(member => member.location === location).length,
+        icon: MapPin,
+        color: [
+          "from-violet-600 to-purple-600",
+          "from-pink-600 to-rose-600", 
+          "from-cyan-600 to-blue-600",
+          "from-lime-600 to-green-600"
+        ][index % 4]
+      }))
     }
   ];
 
@@ -159,7 +114,7 @@ export const QuickFilters = ({
                 className={`group relative h-auto py-4 px-6 flex items-center gap-3 transition-all duration-300 border-2 font-semibold ${
                   quickFilter === filter.key 
                     ? `bg-gradient-to-r ${filter.color} text-white shadow-xl scale-105 border-transparent` 
-                    : 'border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700 hover:scale-105 hover:shadow-lg backdrop-blur-sm text-slate-900 dark:text-white'
+                    : 'border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700 hover:scale-105 hover:shadow-lg backdrop-blur-sm'
                 }`}
               >
                 {/* Premium glow effect for active buttons */}
@@ -186,7 +141,7 @@ export const QuickFilters = ({
                   className={`relative z-10 ml-1 transition-all duration-300 font-bold ${
                     quickFilter === filter.key 
                       ? 'bg-white/20 text-white border-white/30 shadow-sm' 
-                      : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600'
                   }`}
                 >
                   {filter.count}
