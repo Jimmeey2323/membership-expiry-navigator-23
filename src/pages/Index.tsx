@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MetricCard } from "@/components/MetricCard";
@@ -143,28 +144,28 @@ const Index = () => {
             value={metrics.total}
             icon={Users}
             color="blue"
-            trend={{ value: 12, isPositive: true }}
+            trend="up"
           />
           <MetricCard
             title="Active Members"
             value={metrics.active}
             icon={UserCheck}
             color="emerald"
-            trend={{ value: 8, isPositive: true }}
+            trend="up"
           />
           <MetricCard
             title="Expired Members"
             value={metrics.expired}
             icon={UserX}
             color="red"
-            trend={{ value: 3, isPositive: false }}
+            trend="down"
           />
           <MetricCard
             title="Total Sessions"
             value={metrics.totalSessions}
             icon={Activity}
             color="purple"
-            trend={{ value: 15, isPositive: true }}
+            trend="up"
           />
         </div>
 
@@ -179,10 +180,10 @@ const Index = () => {
         {/* Charts - Updated to use filtered data */}
         <PremiumCharts data={filteredData} />
 
-        {/* Enhanced Data Table - Updated to use filtered data and handle clicks */}
+        {/* Enhanced Data Table - Updated to use filtered data */}
         <EnhancedDataTable 
           data={filteredData}
-          onMemberClick={handleMemberClick}
+          title="Complete Member Overview"
         />
       </div>
 
