@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -21,9 +20,18 @@ import {
   Save,
   X,
   Plus,
-  Clock
+  Clock,
+  Trash2
 } from "lucide-react";
 import { MembershipData } from "@/types/membership";
+import { toast } from "sonner";
+
+interface Note {
+  id: string;
+  content: string;
+  date: string;
+  type: 'note' | 'comment';
+}
 
 interface MemberDetailModalProps {
   member: MembershipData | null;
@@ -33,35 +41,91 @@ interface MemberDetailModalProps {
 }
 
 export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDetailModalProps) => {
-  const [comments, setComments] = useState('');
-  const [notes, setNotes] = useState('');
+  const [newComment, setNewComment] = useState('');
+  const [newNote, setNewNote] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [comments, setComments] = useState<Note[]>([]);
 
   useEffect(() => {
     if (member) {
-      setComments(member.comments || '');
-      setNotes(member.notes || '');
       setTags(member.tags || []);
+      // Initialize with existing data if any
+      const existingNotes: Note[] = member.notes ? [{
+        id: '1',
+        content: member.notes,
+        date: new Date().toISOString(),
+        type: 'note'
+      }] : [];
+      const existingComments: Note[] = member.comments ? [{
+        id: '1',
+        content: member.comments,
+        date: new Date().toISOString(),
+        type: 'comment'
+      }] : [];
+      setNotes(existingNotes);
+      setComments(existingComments);
     }
   }, [member]);
 
   if (!member) return null;
 
   const handleSave = () => {
-    onSave(member.memberId, comments, notes, tags);
+    const allNotes = notes.map(n => n.content).join('\n---\n');
+    const allComments = comments.map(c => c.content).join('\n---\n');
+    onSave(member.memberId, allComments, allNotes, tags);
     onClose();
+  };
+
+  const addNote = () => {
+    if (newNote.trim()) {
+      const note: Note = {
+        id: Date.now().toString(),
+        content: newNote.trim(),
+        date: new Date().toISOString(),
+        type: 'note'
+      };
+      setNotes([...notes, note]);
+      setNewNote('');
+      toast.success('Note added successfully!');
+    }
+  };
+
+  const addComment = () => {
+    if (newComment.trim()) {
+      const comment: Note = {
+        id: Date.now().toString(),
+        content: newComment.trim(),
+        date: new Date().toISOString(),
+        type: 'comment'
+      };
+      setComments([...comments, comment]);
+      setNewComment('');
+      toast.success('Comment added successfully!');
+    }
   };
 
   const addTag = () => {
     if (newTag.trim() && !tags.includes(newTag.trim())) {
       setTags([...tags, newTag.trim()]);
       setNewTag('');
+      toast.success('Tag added successfully!');
     }
   };
 
   const removeTag = (tagToRemove: string) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
+  };
+
+  const removeNote = (noteId: string) => {
+    setNotes(notes.filter(note => note.id !== noteId));
+    toast.success('Note removed successfully!');
+  };
+
+  const removeComment = (commentId: string) => {
+    setComments(comments.filter(comment => comment.id !== commentId));
+    toast.success('Comment removed successfully!');
   };
 
   const getMembershipIcon = (membershipName: string) => {
@@ -82,7 +146,9 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
       return new Date(dateStr).toLocaleDateString('en-IN', {
         day: '2-digit',
         month: 'short',
-        year: 'numeric'
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch {
       return dateStr;
@@ -91,8 +157,8 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden bg-white dark:bg-slate-900">
-        <DialogHeader className="pb-6 border-b dark:border-slate-700">
+      <DialogContent className="max-w-5xl max-h-[95vh] overflow-hidden bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700">
+        <DialogHeader className="pb-6 border-b border-slate-200 dark:border-slate-700">
           <DialogTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-3">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 rounded-full flex items-center justify-center font-bold text-blue-700 dark:text-blue-300">
               {member.firstName.charAt(0)}{member.lastName.charAt(0)}
@@ -119,9 +185,9 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
             </TabsTrigger>
           </TabsList>
 
-          <div className="mt-6 overflow-y-auto max-h-[60vh]">
+          <div className="mt-6 overflow-y-auto max-h-[65vh]">
             <TabsContent value="overview" className="space-y-6">
-              {/* Member Information */}
+              {/* Member Information Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800">
                   <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
@@ -211,55 +277,63 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
                 </Card>
               </div>
 
-              {/* Notes, Comments and Tags Section */}
-              {(member.notes || member.comments || (member.tags && member.tags.length > 0)) && (
+              {/* Existing Notes, Comments and Tags Display */}
+              {(notes.length > 0 || comments.length > 0 || tags.length > 0) && (
                 <Card className="p-6 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-200 dark:border-slate-600">
                   <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
                     <FileText className="h-5 w-5" />
-                    Saved Notes & Information
+                    Saved Information
                   </h3>
                   
                   <div className="space-y-6">
-                    {member.comments && (
-                      <div className="space-y-2">
+                    {comments.length > 0 && (
+                      <div className="space-y-3">
                         <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
                           <MessageSquare className="h-4 w-4" />
-                          <span className="font-semibold">Comments</span>
-                          <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                            <Clock className="h-3 w-3" />
-                            Last updated: {formatDate(member.endDate)}
+                          <span className="font-semibold">Comments ({comments.length})</span>
+                        </div>
+                        {comments.map((comment) => (
+                          <div key={comment.id} className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-600">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                <Clock className="h-3 w-3" />
+                                {formatDate(comment.date)}
+                              </div>
+                            </div>
+                            <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{comment.content}</p>
                           </div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-600">
-                          <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{member.comments}</p>
-                        </div>
+                        ))}
                       </div>
                     )}
 
-                    {member.notes && (
-                      <div className="space-y-2">
+                    {notes.length > 0 && (
+                      <div className="space-y-3">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
                           <FileText className="h-4 w-4" />
-                          <span className="font-semibold">Internal Notes</span>
-                          <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                            <Clock className="h-3 w-3" />
-                            Last updated: {formatDate(member.endDate)}
+                          <span className="font-semibold">Internal Notes ({notes.length})</span>
+                        </div>
+                        {notes.map((note) => (
+                          <div key={note.id} className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-600">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                <Clock className="h-3 w-3" />
+                                {formatDate(note.date)}
+                              </div>
+                            </div>
+                            <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{note.content}</p>
                           </div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-600">
-                          <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{member.notes}</p>
-                        </div>
+                        ))}
                       </div>
                     )}
 
-                    {member.tags && member.tags.length > 0 && (
+                    {tags.length > 0 && (
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
                           <Tag className="h-4 w-4" />
-                          <span className="font-semibold">Tags</span>
+                          <span className="font-semibold">Tags ({tags.length})</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {member.tags.map((tag, index) => (
+                          {tags.map((tag, index) => (
                             <Badge 
                               key={index} 
                               variant="outline" 
@@ -278,39 +352,62 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
 
             <TabsContent value="annotations" className="space-y-6">
               <div className="space-y-6">
-                <Card className="p-6">
+                {/* Add New Comment */}
+                <Card className="p-6 border-2 border-blue-200 dark:border-blue-800">
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5" />
-                    Comments
+                    <MessageSquare className="h-5 w-5 text-blue-600" />
+                    Add Comment
                   </h3>
-                  <Textarea
-                    placeholder="Add comments about this member..."
-                    value={comments}
-                    onChange={(e) => setComments(e.target.value)}
-                    className="min-h-[100px] dark:bg-slate-800 dark:border-slate-600 dark:text-white"
-                  />
+                  <div className="flex gap-3">
+                    <Textarea
+                      placeholder="Add a new comment..."
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      className="flex-1 min-h-[80px] dark:bg-slate-800 dark:border-slate-600 dark:text-white"
+                    />
+                    <Button 
+                      onClick={addComment} 
+                      disabled={!newComment.trim()}
+                      className="bg-blue-600 hover:bg-blue-700 text-white self-end"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add
+                    </Button>
+                  </div>
                 </Card>
 
-                <Card className="p-6">
+                {/* Add New Note */}
+                <Card className="p-6 border-2 border-green-200 dark:border-green-800">
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Internal Notes
+                    <FileText className="h-5 w-5 text-green-600" />
+                    Add Internal Note
                   </h3>
-                  <Textarea
-                    placeholder="Add internal notes (not visible to member)..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="min-h-[100px] dark:bg-slate-800 dark:border-slate-600 dark:text-white"
-                  />
+                  <div className="flex gap-3">
+                    <Textarea
+                      placeholder="Add an internal note..."
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      className="flex-1 min-h-[80px] dark:bg-slate-800 dark:border-slate-600 dark:text-white"
+                    />
+                    <Button 
+                      onClick={addNote} 
+                      disabled={!newNote.trim()}
+                      className="bg-green-600 hover:bg-green-700 text-white self-end"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add
+                    </Button>
+                  </div>
                 </Card>
 
-                <Card className="p-6">
+                {/* Manage Tags */}
+                <Card className="p-6 border-2 border-purple-200 dark:border-purple-800">
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Tag className="h-5 w-5" />
-                    Tags
+                    <Tag className="h-5 w-5 text-purple-600" />
+                    Manage Tags
                   </h3>
                   <div className="space-y-4">
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                       <Input
                         placeholder="Add a tag..."
                         value={newTag}
@@ -318,7 +415,12 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
                         onKeyPress={(e) => e.key === 'Enter' && addTag()}
                         className="dark:bg-slate-800 dark:border-slate-600 dark:text-white"
                       />
-                      <Button onClick={addTag} variant="outline" className="dark:border-slate-600 dark:text-white dark:hover:bg-slate-700">
+                      <Button 
+                        onClick={addTag} 
+                        disabled={!newTag.trim()}
+                        variant="outline" 
+                        className="dark:border-slate-600 dark:text-white dark:hover:bg-slate-700"
+                      >
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
@@ -327,7 +429,7 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
                         <Badge 
                           key={index} 
                           variant="outline" 
-                          className="bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 px-3 py-1 flex items-center gap-1"
+                          className="bg-purple-50 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700 px-3 py-1 flex items-center gap-1"
                         >
                           {tag}
                           <button
@@ -341,18 +443,87 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
                     </div>
                   </div>
                 </Card>
+
+                {/* Display All Comments and Notes with Management */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Comments List */}
+                  <Card className="p-6">
+                    <h4 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-4 flex items-center gap-2">
+                      <MessageSquare className="h-5 w-5" />
+                      All Comments ({comments.length})
+                    </h4>
+                    <div className="space-y-3 max-h-80 overflow-y-auto">
+                      {comments.length === 0 ? (
+                        <p className="text-slate-500 dark:text-slate-400 italic">No comments yet</p>
+                      ) : (
+                        comments.map(comment => (
+                          <div key={comment.id} className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                                <Clock className="h-3 w-3" />
+                                {formatDate(comment.date)}
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => removeComment(comment.id)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{comment.content}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </Card>
+
+                  {/* Notes List */}
+                  <Card className="p-6">
+                    <h4 className="text-lg font-semibold text-green-700 dark:text-green-300 mb-4 flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      All Notes ({notes.length})
+                    </h4>
+                    <div className="space-y-3 max-h-80 overflow-y-auto">
+                      {notes.length === 0 ? (
+                        <p className="text-slate-500 dark:text-slate-400 italic">No notes yet</p>
+                      ) : (
+                        notes.map(note => (
+                          <div key={note.id} className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                                <Clock className="h-3 w-3" />
+                                {formatDate(note.date)}
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => removeNote(note.id)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{note.content}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </Card>
+                </div>
               </div>
             </TabsContent>
           </div>
         </Tabs>
 
-        <div className="flex justify-end gap-3 pt-6 border-t dark:border-slate-700">
+        <div className="flex justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
           <Button variant="outline" onClick={onClose} className="dark:border-slate-600 dark:text-white dark:hover:bg-slate-700">
             Cancel
           </Button>
           <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white">
             <Save className="h-4 w-4 mr-2" />
-            Save Changes
+            Save All Changes
           </Button>
         </div>
       </DialogContent>
