@@ -10,6 +10,8 @@ import { EnhancedDataTable } from "@/components/EnhancedDataTable";
 import { PremiumCharts } from "@/components/PremiumCharts";
 import { CollapsibleFilters } from "@/components/CollapsibleFilters";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { HeroSection } from "@/components/HeroSection";
+import { Footer } from "@/components/Footer";
 import { googleSheetsService } from "@/services/googleSheets";
 import { MembershipData, FilterOptions } from "@/types/membership";
 import { Link } from "react-router-dom";
@@ -202,15 +204,10 @@ const Index = () => {
           !member.paid || member.paid === '-' || parseFloat(member.paid || '0') === 0
         );
       default:
-        // Handle location and membership type filters
-        const availableLocations = [...new Set(localMembershipData.map(m => m.location).filter(Boolean))];
-        const availableMembershipTypes = [...new Set(localMembershipData.map(m => m.membershipName).filter(Boolean))];
-        
-        if (availableLocations.includes(quickFilter)) {
-          return data.filter(member => member.location === quickFilter);
-        }
-        if (availableMembershipTypes.includes(quickFilter)) {
-          return data.filter(member => member.membershipName === quickFilter);
+        // Handle location filters
+        if (quickFilter.startsWith('location-')) {
+          const location = quickFilter.replace('location-', '');
+          return data.filter(member => member.location === location);
         }
         return data;
     }
@@ -219,10 +216,11 @@ const Index = () => {
   // Apply filters in the correct order: advanced filters first, then quick filters
   const filteredData = applyQuickFilter(applyFilters(localMembershipData));
   
-  const activeMembers = localMembershipData.filter(member => member.status === 'Active');
-  const expiredMembers = localMembershipData.filter(member => member.status === 'Expired');
-  const membersWithSessions = localMembershipData.filter(member => member.sessionsLeft > 0);
-  const expiringMembers = localMembershipData.filter(member => {
+  // Calculate metrics based on filtered data
+  const activeMembers = filteredData.filter(member => member.status === 'Active');
+  const expiredMembers = filteredData.filter(member => member.status === 'Expired');
+  const membersWithSessions = filteredData.filter(member => member.sessionsLeft > 0);
+  const expiringMembers = filteredData.filter(member => {
     const endDate = parseDate(member.endDate);
     const now = new Date();
     return endDate >= now && endDate <= new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -250,7 +248,7 @@ const Index = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 dark:from-slate-900 dark:via-slate-800/30 dark:to-slate-900/20 flex items-center justify-center">
         <div className="text-center space-y-8 animate-fade-in">
           <Card className="premium-card p-16 max-w-xl mx-auto shadow-2xl">
             <div className="relative mb-8">
@@ -260,10 +258,10 @@ const Index = () => {
               </div>
             </div>
             <div className="space-y-6">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-blue-800 bg-clip-text text-transparent">
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-blue-800 dark:from-white dark:to-blue-200 bg-clip-text text-transparent">
                 Loading Premium Dashboard
               </h2>
-              <p className="text-xl text-slate-600 font-medium">
+              <p className="text-xl text-slate-600 dark:text-slate-300 font-medium">
                 Fetching advanced analytics & member insights...
               </p>
               
@@ -287,35 +285,31 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/20 to-purple-50/10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/20 to-purple-50/10 dark:from-slate-900 dark:via-slate-800/20 dark:to-slate-900/10">
       {/* Full width container */}
       <div className="max-w-[1920px] mx-auto px-8 py-12 space-y-12">
+        {/* Hero Section */}
+        <HeroSection />
+
         {/* Premium Header */}
         <div className="relative animate-fade-in">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-orange-500/10 rounded-3xl blur-3xl" />
-          <Card className="relative premium-card p-10 rounded-3xl border-2 shadow-2xl bg-gradient-to-br from-white via-slate-50/50 to-white backdrop-blur-sm">
+          <Card className="relative premium-card p-10 rounded-3xl border-2 shadow-2xl bg-gradient-to-br from-white via-slate-50/50 to-white dark:from-slate-900 dark:via-slate-800/50 dark:to-slate-900 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <div className="space-y-4">
                 <div className="flex items-center gap-8">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-purple-600 to-orange-500 rounded-3xl blur-xl opacity-40 animate-pulse" />
-                    <div className="relative p-6 bg-gradient-to-r from-blue-600 via-purple-600 to-orange-500 text-white rounded-3xl shadow-2xl">
-                      <Building2 className="h-10 w-10" />
-                    </div>
-                  </div>
                   <div className="space-y-2">
-                    <h1 className="text-5xl font-bold bg-gradient-to-r from-slate-900 via-blue-800 to-purple-800 bg-clip-text text-transparent">
-                      Premium Membership Analytics
-                    </h1>
-                    <p className="text-2xl text-slate-600 font-medium">
-                      Advanced insights & comprehensive member management platform
+                    <h2 className="text-4xl font-bold bg-gradient-to-r from-slate-900 via-blue-800 to-purple-800 dark:from-white dark:via-blue-200 dark:to-purple-200 bg-clip-text text-transparent">
+                      Advanced Analytics Dashboard
+                    </h2>
+                    <p className="text-xl text-slate-600 dark:text-slate-300 font-medium">
+                      Real-time insights and comprehensive member management
                     </p>
                     <div className="flex items-center gap-4 mt-4">
-                      <div className="flex items-center gap-2 bg-emerald-100 text-emerald-800 px-4 py-2 rounded-full text-sm font-semibold">
+                      <div className="flex items-center gap-2 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 px-4 py-2 rounded-full text-sm font-semibold">
                         <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                         Live Data
                       </div>
-                      <div className="flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-semibold">
+                      <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 px-4 py-2 rounded-full text-sm font-semibold">
                         <Sparkles className="h-4 w-4" />
                         Premium Features
                       </div>
@@ -330,7 +324,7 @@ const Index = () => {
                   <Button 
                     variant="outline" 
                     size="lg"
-                    className="premium-card border-red-200 hover:bg-red-50 text-red-700 shadow-lg hover:shadow-xl font-semibold px-6"
+                    className="premium-card border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 shadow-lg hover:shadow-xl font-semibold px-6"
                   >
                     <TrendingDown className="h-5 w-5 mr-2" />
                     Churn Analytics
@@ -340,7 +334,7 @@ const Index = () => {
                   onClick={handleRefresh} 
                   variant="outline" 
                   size="lg"
-                  className="premium-card hover:bg-slate-50 shadow-lg hover:shadow-xl font-semibold px-6"
+                  className="premium-card hover:bg-slate-50 dark:hover:bg-slate-800 shadow-lg hover:shadow-xl font-semibold px-6 text-slate-900 dark:text-white"
                 >
                   <RefreshCw className="h-5 w-5 mr-2" />
                   Refresh Data
@@ -358,7 +352,7 @@ const Index = () => {
                     onClick={handleFiltersReset}
                     variant="outline"
                     size="lg"
-                    className="premium-card border-orange-200 hover:bg-orange-50 text-orange-700 shadow-lg hover:shadow-xl font-semibold px-6"
+                    className="premium-card border-orange-200 dark:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 shadow-lg hover:shadow-xl font-semibold px-6"
                   >
                     Clear Filters
                   </Button>
@@ -378,11 +372,11 @@ const Index = () => {
           />
         </div>
 
-        {/* Premium Metrics Grid */}
+        {/* Premium Metrics Grid - Now shows filtered data */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-slide-up">
           <MetricCard
             title="Total Members"
-            value={localMembershipData.length}
+            value={filteredData.length}
             icon={Users}
             change="+12% from last month"
             trend="up"
@@ -424,21 +418,21 @@ const Index = () => {
           />
           <MetricCard
             title="Total Sessions"
-            value={localMembershipData.reduce((sum, member) => sum + member.sessionsLeft, 0)}
+            value={filteredData.reduce((sum, member) => sum + member.sessionsLeft, 0)}
             icon={Dumbbell}
             change="+15% from last month"
             trend="up"
             tooltip="Total remaining sessions across all active memberships"
             drillDownData={[
-              { label: 'Available', value: localMembershipData.reduce((sum, member) => sum + member.sessionsLeft, 0) },
+              { label: 'Available', value: filteredData.reduce((sum, member) => sum + member.sessionsLeft, 0) },
               { label: 'Used This Month', value: 156 },
-              { label: 'Avg per Member', value: Math.round(localMembershipData.reduce((sum, member) => sum + member.sessionsLeft, 0) / localMembershipData.length) },
+              { label: 'Avg per Member', value: Math.round(filteredData.reduce((sum, member) => sum + member.sessionsLeft, 0) / (filteredData.length || 1)) },
               { label: 'Peak Usage', value: 45 }
             ]}
           />
         </div>
 
-        {/* Premium Charts */}
+        {/* Premium Charts - Now uses filtered data */}
         <div className="animate-slide-up">
           <PremiumCharts data={filteredData} />
         </div>
@@ -448,31 +442,31 @@ const Index = () => {
           <Tabs defaultValue="overview" className="space-y-8">
             <div className="relative">
               <Card className="premium-card p-4 shadow-lg">
-                <TabsList className="grid w-full grid-cols-4 bg-gradient-to-r from-slate-100 to-slate-200 gap-2 p-3 rounded-2xl">
+                <TabsList className="grid w-full grid-cols-4 bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 gap-2 p-3 rounded-2xl">
                   <TabsTrigger 
                     value="overview" 
-                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80 dark:hover:bg-slate-600 text-slate-900 dark:text-white"
                   >
                     <Activity className="h-5 w-5 mr-2" />
                     All Members ({filteredData.length})
                   </TabsTrigger>
                   <TabsTrigger 
                     value="active" 
-                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80 dark:hover:bg-slate-600 text-slate-900 dark:text-white"
                   >
                     <UserCheck className="h-5 w-5 mr-2" />
-                    Active ({filteredData.filter(m => m.status === 'Active').length})
+                    Active ({activeMembers.length})
                   </TabsTrigger>
                   <TabsTrigger 
                     value="expired" 
-                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-red-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-red-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80 dark:hover:bg-slate-600 text-slate-900 dark:text-white"
                   >
                     <UserX className="h-5 w-5 mr-2" />
-                    Expired ({filteredData.filter(m => m.status === 'Expired').length})
+                    Expired ({expiredMembers.length})
                   </TabsTrigger>
                   <TabsTrigger 
                     value="premium" 
-                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80 dark:hover:bg-slate-600 text-slate-900 dark:text-white"
                   >
                     <Crown className="h-5 w-5 mr-2" />
                     Premium ({filteredData.filter(m => m.membershipName?.toLowerCase().includes('unlimited') || m.membershipName?.toLowerCase().includes('premium')).length})
@@ -491,7 +485,7 @@ const Index = () => {
 
             <TabsContent value="active" className="space-y-6">
               <EnhancedDataTable 
-                data={filteredData.filter(member => member.status === 'Active')} 
+                data={activeMembers} 
                 title="Active Members Dashboard"
                 onAnnotationUpdate={handleAnnotationUpdate}
               />
@@ -499,7 +493,7 @@ const Index = () => {
 
             <TabsContent value="expired" className="space-y-6">
               <EnhancedDataTable 
-                data={filteredData.filter(member => member.status === 'Expired')} 
+                data={expiredMembers} 
                 title="Expired Members - Renewal Opportunities"
                 onAnnotationUpdate={handleAnnotationUpdate}
               />
@@ -530,6 +524,9 @@ const Index = () => {
           availableLocations={availableLocations}
           availableMembershipTypes={availableMembershipTypes}
         />
+
+        {/* Footer */}
+        <Footer />
       </div>
     </div>
   );
