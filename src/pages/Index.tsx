@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MetricCard } from "@/components/MetricCard";
@@ -143,28 +142,24 @@ const Index = () => {
             title="Total Members"
             value={metrics.total}
             icon={Users}
-            color="blue"
             trend="up"
           />
           <MetricCard
             title="Active Members"
             value={metrics.active}
             icon={UserCheck}
-            color="emerald"
             trend="up"
           />
           <MetricCard
             title="Expired Members"
             value={metrics.expired}
             icon={UserX}
-            color="red"
             trend="down"
           />
           <MetricCard
             title="Total Sessions"
             value={metrics.totalSessions}
             icon={Activity}
-            color="purple"
             trend="up"
           />
         </div>
