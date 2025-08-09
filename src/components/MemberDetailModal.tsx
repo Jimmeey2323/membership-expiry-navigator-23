@@ -137,10 +137,6 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
                       <span className="text-slate-600 dark:text-slate-300">Email:</span>
                       <span className="font-semibold text-slate-900 dark:text-white">{member.email}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-300">Phone:</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">{member.phoneNumber || 'Not provided'}</span>
-                    </div>
                   </div>
                 </Card>
 
@@ -183,12 +179,12 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
                       <span className="font-semibold text-slate-900 dark:text-white">{formatDate(member.orderDate)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-300">Start Date:</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">{formatDate(member.startDate)}</span>
-                    </div>
-                    <div className="flex justify-between">
                       <span className="text-slate-600 dark:text-slate-300">End Date:</span>
                       <span className="font-semibold text-slate-900 dark:text-white">{formatDate(member.endDate)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-300">Sold By:</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{member.soldBy || 'N/A'}</span>
                     </div>
                   </div>
                 </Card>
@@ -208,8 +204,8 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
                       <span className="font-semibold text-slate-900 dark:text-white">₹{member.paid || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-300">Payment Mode:</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">{member.paymentMode || 'N/A'}</span>
+                      <span className="text-slate-600 dark:text-slate-300">Status:</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{member.frozen === 'Yes' ? 'Frozen' : 'Active'}</span>
                     </div>
                   </div>
                 </Card>
