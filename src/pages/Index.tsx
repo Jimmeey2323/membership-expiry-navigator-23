@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -73,7 +72,7 @@ const Index = () => {
   };
 
   // Enhanced filter application with proper logic
-  const applyFilters = (data: MembershipData[]): MembershipData[] => {
+  const applyAdvancedFilters = (data: MembershipData[]): MembershipData[] => {
     return data.filter(member => {
       // Status filter
       if (filters.status.length > 0 && !filters.status.includes(member.status)) {
@@ -149,7 +148,7 @@ const Index = () => {
   };
 
   // Enhanced quick filter application
-  const applyQuickFilter = (data: MembershipData[]): MembershipData[] => {
+  const applyQuickFilters = (data: MembershipData[]): MembershipData[] => {
     if (quickFilter === 'all') return data;
     
     const now = new Date();
@@ -216,16 +215,28 @@ const Index = () => {
     }
   };
 
-  // Apply filters in the correct order: advanced filters first, then quick filters
-  const filteredData = applyQuickFilter(applyFilters(localMembershipData));
+  // Combined filter application: advanced filters first, then quick filters
+  const getFilteredData = (): MembershipData[] => {
+    // First apply advanced filters
+    let filteredData = applyAdvancedFilters(localMembershipData);
+    
+    // Then apply quick filters
+    filteredData = applyQuickFilters(filteredData);
+    
+    return filteredData;
+  };
+
+  // Get filtered data for all components
+  const filteredData = getFilteredData();
   
-  const activeMembers = localMembershipData.filter(member => member.status === 'Active');
-  const expiredMembers = localMembershipData.filter(member => member.status === 'Expired');
-  const membersWithSessions = localMembershipData.filter(member => member.sessionsLeft > 0);
-  const expiringMembers = localMembershipData.filter(member => {
+  // Calculate metrics based on filtered data
+  const activeMembers = filteredData.filter(member => member.status === 'Active');
+  const expiredMembers = filteredData.filter(member => member.status === 'Expired');
+  const membersWithSessions = filteredData.filter(member => member.sessionsLeft > 0);
+  const expiringMembers = filteredData.filter(member => {
     const endDate = parseDate(member.endDate);
     const now = new Date();
-    return endDate >= now && endDate <= new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    return endDate >= now && endDate <= new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) && member.status === 'Active';
   });
 
   const availableLocations = [...new Set(localMembershipData.map(member => member.location).filter(l => l && l !== '-'))];
@@ -246,6 +257,17 @@ const Index = () => {
     });
     setQuickFilter('all');
     toast.success("All filters cleared");
+  };
+
+  const hasActiveFilters = () => {
+    return quickFilter !== 'all' || 
+           filters.status.length > 0 || 
+           filters.locations.length > 0 || 
+           filters.membershipTypes.length > 0 ||
+           filters.dateRange.start !== '' ||
+           filters.dateRange.end !== '' ||
+           filters.sessionsRange.min !== 0 ||
+           filters.sessionsRange.max !== 100;
   };
 
   if (isLoading) {
@@ -319,6 +341,12 @@ const Index = () => {
                         <Sparkles className="h-4 w-4" />
                         Premium Features
                       </div>
+                      {hasActiveFilters() && (
+                        <div className="flex items-center gap-2 bg-orange-100 text-orange-800 px-4 py-2 rounded-full text-sm font-semibold">
+                          <Filter className="h-4 w-4" />
+                          Filters Active ({filteredData.length} results)
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -353,14 +381,14 @@ const Index = () => {
                   <Filter className="h-5 w-5 mr-2" />
                   Advanced Filters
                 </Button>
-                {(quickFilter !== 'all' || filters.status.length > 0 || filters.locations.length > 0) && (
+                {hasActiveFilters() && (
                   <Button 
                     onClick={handleFiltersReset}
                     variant="outline"
                     size="lg"
                     className="premium-card border-orange-200 hover:bg-orange-50 text-orange-700 shadow-lg hover:shadow-xl font-semibold px-6"
                   >
-                    Clear Filters
+                    Clear All Filters
                   </Button>
                 )}
               </div>
@@ -373,16 +401,16 @@ const Index = () => {
           <CollapsibleFilters
             quickFilter={quickFilter}
             onQuickFilterChange={setQuickFilter}
-            membershipData={localMembershipData}
+            membershipData={filteredData}
             availableLocations={availableLocations}
           />
         </div>
 
-        {/* Premium Metrics Grid */}
+        {/* Premium Metrics Grid - Now uses filtered data */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-slide-up">
           <MetricCard
             title="Total Members"
-            value={localMembershipData.length}
+            value={filteredData.length}
             icon={Users}
             change="+12% from last month"
             trend="up"
@@ -424,21 +452,21 @@ const Index = () => {
           />
           <MetricCard
             title="Total Sessions"
-            value={localMembershipData.reduce((sum, member) => sum + member.sessionsLeft, 0)}
+            value={filteredData.reduce((sum, member) => sum + member.sessionsLeft, 0)}
             icon={Dumbbell}
             change="+15% from last month"
             trend="up"
             tooltip="Total remaining sessions across all active memberships"
             drillDownData={[
-              { label: 'Available', value: localMembershipData.reduce((sum, member) => sum + member.sessionsLeft, 0) },
+              { label: 'Available', value: filteredData.reduce((sum, member) => sum + member.sessionsLeft, 0) },
               { label: 'Used This Month', value: 156 },
-              { label: 'Avg per Member', value: Math.round(localMembershipData.reduce((sum, member) => sum + member.sessionsLeft, 0) / localMembershipData.length) },
+              { label: 'Avg per Member', value: Math.round(filteredData.reduce((sum, member) => sum + member.sessionsLeft, 0) / filteredData.length) || 0 },
               { label: 'Peak Usage', value: 45 }
             ]}
           />
         </div>
 
-        {/* Premium Charts */}
+        {/* Premium Charts - Now uses filtered data */}
         <div className="animate-slide-up">
           <PremiumCharts data={filteredData} />
         </div>
@@ -461,14 +489,14 @@ const Index = () => {
                     className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
                   >
                     <UserCheck className="h-5 w-5 mr-2" />
-                    Active ({filteredData.filter(m => m.status === 'Active').length})
+                    Active ({activeMembers.length})
                   </TabsTrigger>
                   <TabsTrigger 
                     value="expired" 
                     className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-red-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
                   >
                     <UserX className="h-5 w-5 mr-2" />
-                    Expired ({filteredData.filter(m => m.status === 'Expired').length})
+                    Expired ({expiredMembers.length})
                   </TabsTrigger>
                   <TabsTrigger 
                     value="premium" 
@@ -491,7 +519,7 @@ const Index = () => {
 
             <TabsContent value="active" className="space-y-6">
               <EnhancedDataTable 
-                data={filteredData.filter(member => member.status === 'Active')} 
+                data={activeMembers} 
                 title="Active Members Dashboard"
                 onAnnotationUpdate={handleAnnotationUpdate}
               />
@@ -499,7 +527,7 @@ const Index = () => {
 
             <TabsContent value="expired" className="space-y-6">
               <EnhancedDataTable 
-                data={filteredData.filter(member => member.status === 'Expired')} 
+                data={expiredMembers} 
                 title="Expired Members - Renewal Opportunities"
                 onAnnotationUpdate={handleAnnotationUpdate}
               />
@@ -524,7 +552,6 @@ const Index = () => {
           filters={filters}
           onFiltersChange={(newFilters) => {
             setFilters(newFilters);
-            setQuickFilter('all');
             toast.success("Advanced filters applied successfully");
           }}
           availableLocations={availableLocations}
