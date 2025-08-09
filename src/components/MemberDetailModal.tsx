@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -35,12 +34,20 @@ interface Comment {
 }
 
 export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDetailModalProps) => {
-  const [comments, setComments] = useState<Comment[]>([
-    { id: '1', text: member?.comments || '', timestamp: new Date(), type: 'comment' }
-  ].filter(c => c.text));
-  const [notes, setNotes] = useState<Comment[]>([
-    { id: '1', text: member?.notes || '', timestamp: new Date(), type: 'note' }
-  ].filter(n => n.text));
+  const [comments, setComments] = useState<Comment[]>(() => {
+    if (member?.comments) {
+      return [{ id: '1', text: member.comments, timestamp: new Date(), type: 'comment' as const }];
+    }
+    return [];
+  });
+  
+  const [notes, setNotes] = useState<Comment[]>(() => {
+    if (member?.notes) {
+      return [{ id: '1', text: member.notes, timestamp: new Date(), type: 'note' as const }];
+    }
+    return [];
+  });
+  
   const [tags, setTags] = useState<string[]>(member?.tags || []);
   const [newComment, setNewComment] = useState('');
   const [newNote, setNewNote] = useState('');
@@ -61,7 +68,7 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
       id: Date.now().toString(),
       text: newComment,
       timestamp: new Date(),
-      type: 'comment'
+      type: 'comment' as const
     };
     setComments(prev => [...prev, comment]);
     setNewComment('');
@@ -73,7 +80,7 @@ export const MemberDetailModal = ({ member, isOpen, onClose, onSave }: MemberDet
       id: Date.now().toString(),
       text: newNote,
       timestamp: new Date(),
-      type: 'note'
+      type: 'note' as const
     };
     setNotes(prev => [...prev, note]);
     setNewNote('');
