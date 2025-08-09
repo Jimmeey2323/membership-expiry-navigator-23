@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -5,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MetricCard } from "@/components/MetricCard";
 import { FilterSidebar } from "@/components/FilterSidebar";
-import { DataTable } from "@/components/DataTable";
-import { MembershipChart } from "@/components/MembershipChart";
+import { EnhancedDataTable } from "@/components/EnhancedDataTable";
+import { PremiumCharts } from "@/components/PremiumCharts";
 import { CollapsibleFilters } from "@/components/CollapsibleFilters";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { googleSheetsService } from "@/services/googleSheets";
@@ -24,7 +25,9 @@ import {
   TrendingUp,
   TrendingDown,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  Crown,
+  Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -66,28 +69,49 @@ const Index = () => {
           : member
       )
     );
+    toast.success("Member annotations updated successfully!");
   };
 
+  // Enhanced filter application with proper logic
   const applyFilters = (data: MembershipData[]): MembershipData[] => {
     return data.filter(member => {
+      // Status filter
       if (filters.status.length > 0 && !filters.status.includes(member.status)) {
         return false;
       }
+      
+      // Location filter
       if (filters.locations.length > 0 && !filters.locations.includes(member.location)) {
         return false;
       }
+      
+      // Membership type filter
       if (filters.membershipTypes.length > 0 && !filters.membershipTypes.includes(member.membershipName)) {
         return false;
       }
+      
+      // Sessions range filter
       if (member.sessionsLeft < filters.sessionsRange.min || member.sessionsLeft > filters.sessionsRange.max) {
         return false;
       }
-      if (filters.dateRange.start && new Date(member.endDate) < new Date(filters.dateRange.start)) {
-        return false;
+      
+      // Date range filter
+      if (filters.dateRange.start) {
+        const memberEndDate = new Date(member.endDate);
+        const filterStartDate = new Date(filters.dateRange.start);
+        if (memberEndDate < filterStartDate) {
+          return false;
+        }
       }
-      if (filters.dateRange.end && new Date(member.endDate) > new Date(filters.dateRange.end)) {
-        return false;
+      
+      if (filters.dateRange.end) {
+        const memberEndDate = new Date(member.endDate);
+        const filterEndDate = new Date(filters.dateRange.end);
+        if (memberEndDate > filterEndDate) {
+          return false;
+        }
       }
+      
       return true;
     });
   };
@@ -96,15 +120,12 @@ const Index = () => {
   const parseDate = (dateStr: string): Date => {
     if (!dateStr || dateStr === '-') return new Date(0);
     
-    // Handle various date formats from Google Sheets
     let cleanDateStr = dateStr.trim();
     
-    // If it contains time info, remove it for basic date parsing
     if (cleanDateStr.includes(' ')) {
       cleanDateStr = cleanDateStr.split(' ')[0];
     }
     
-    // Try parsing DD/MM/YYYY format
     if (cleanDateStr.includes('/')) {
       const parts = cleanDateStr.split('/');
       if (parts.length === 3) {
@@ -116,7 +137,6 @@ const Index = () => {
       }
     }
     
-    // Try parsing YYYY-MM-DD format
     if (cleanDateStr.includes('-')) {
       const parsedDate = new Date(cleanDateStr);
       if (!isNaN(parsedDate.getTime())) {
@@ -124,21 +144,13 @@ const Index = () => {
       }
     }
     
-    // Fallback to direct Date constructor
     const fallbackDate = new Date(dateStr);
     return isNaN(fallbackDate.getTime()) ? new Date(0) : fallbackDate;
   };
 
+  // Enhanced quick filter application
   const applyQuickFilter = (data: MembershipData[]): MembershipData[] => {
-    // If quickFilter is 'all', don't apply any additional filtering
     if (quickFilter === 'all') return data;
-    
-    // Handle multi-filter mode - this will be expanded when CollapsibleFilters passes active filters
-    if (quickFilter === 'multi-filter') {
-      // For now, return all data - the actual multi-filtering logic would be handled
-      // by passing the active filters from CollapsibleFilters to Index
-      return data;
-    }
     
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -178,17 +190,25 @@ const Index = () => {
           return endDate >= now && endDate <= nextMonth && member.status === 'Active';
         });
       case 'premium':
-        return data.filter(member => member.membershipName && member.membershipName.toLowerCase().includes('unlimited'));
+        return data.filter(member => 
+          member.membershipName && 
+          (member.membershipName.toLowerCase().includes('unlimited') || 
+           member.membershipName.toLowerCase().includes('premium'))
+        );
       case 'high-value':
-        return data.filter(member => parseFloat(member.paid) > 5000);
+        return data.filter(member => parseFloat(member.paid || '0') > 5000);
       case 'unpaid':
-        return data.filter(member => !member.paid || member.paid === '-' || parseFloat(member.paid) === 0);
+        return data.filter(member => 
+          !member.paid || member.paid === '-' || parseFloat(member.paid || '0') === 0
+        );
       default:
-        // Handle location filters and membership type filters
+        // Handle location and membership type filters
+        const availableLocations = [...new Set(localMembershipData.map(m => m.location).filter(Boolean))];
+        const availableMembershipTypes = [...new Set(localMembershipData.map(m => m.membershipName).filter(Boolean))];
+        
         if (availableLocations.includes(quickFilter)) {
           return data.filter(member => member.location === quickFilter);
         }
-        const availableMembershipTypes = [...new Set(localMembershipData.map(m => m.membershipName).filter(Boolean))];
         if (availableMembershipTypes.includes(quickFilter)) {
           return data.filter(member => member.membershipName === quickFilter);
         }
@@ -196,7 +216,9 @@ const Index = () => {
     }
   };
 
+  // Apply filters in the correct order: advanced filters first, then quick filters
   const filteredData = applyQuickFilter(applyFilters(localMembershipData));
+  
   const activeMembers = localMembershipData.filter(member => member.status === 'Active');
   const expiredMembers = localMembershipData.filter(member => member.status === 'Expired');
   const membersWithSessions = localMembershipData.filter(member => member.sessionsLeft > 0);
@@ -214,35 +236,45 @@ const Index = () => {
     toast.success("Data refreshed successfully");
   };
 
+  const handleFiltersReset = () => {
+    setFilters({
+      status: [],
+      locations: [],
+      membershipTypes: [],
+      dateRange: { start: '', end: '' },
+      sessionsRange: { min: 0, max: 100 }
+    });
+    setQuickFilter('all');
+    toast.success("All filters cleared");
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen gradient-mesh flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 flex items-center justify-center">
         <div className="text-center space-y-8 animate-fade-in">
-          <Card className="card-glass p-12 max-w-md mx-auto">
+          <Card className="premium-card p-16 max-w-xl mx-auto shadow-2xl">
             <div className="relative mb-8">
-              <div className="absolute inset-0 gradient-primary rounded-full blur-lg opacity-50 animate-glow" />
-              <div className="relative p-6 gradient-primary text-white rounded-full mx-auto w-fit">
-                <RefreshCw className="h-12 w-12 animate-spin" />
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 rounded-full blur-2xl opacity-30 animate-pulse" />
+              <div className="relative p-8 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white rounded-full mx-auto w-fit shadow-2xl">
+                <RefreshCw className="h-16 w-16 animate-spin" />
               </div>
             </div>
-            <div className="space-y-4">
-              <h2 className="text-sophisticated text-2xl">
-                Loading Dashboard
+            <div className="space-y-6">
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-blue-800 bg-clip-text text-transparent">
+                Loading Premium Dashboard
               </h2>
-              <p className="text-refined text-lg">
-                Fetching membership data & analytics...
+              <p className="text-xl text-slate-600 font-medium">
+                Fetching advanced analytics & member insights...
               </p>
               
-              {/* Loading shimmer bars */}
-              <div className="space-y-3 mt-8">
+              <div className="space-y-4 mt-12">
                 {[1, 2, 3].map((i) => (
                   <div 
                     key={i}
-                    className="h-2 bg-gradient-to-r from-primary/20 via-primary/40 to-primary/20 rounded-full animate-shimmer"
+                    className="h-3 bg-gradient-to-r from-blue-200/40 via-purple-300/60 to-blue-200/40 rounded-full animate-pulse"
                     style={{ 
-                      animationDelay: `${i * 200}ms`,
-                      backgroundSize: '200px 100%',
-                      backgroundRepeat: 'no-repeat'
+                      animationDelay: `${i * 300}ms`,
+                      animationDuration: '2s'
                     }}
                   />
                 ))}
@@ -255,64 +287,88 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen gradient-mesh">
-      <div className="container-constrained section-spacing space-y-12">
-        {/* Sophisticated Header */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/20 to-purple-50/10">
+      {/* Full width container */}
+      <div className="max-w-[1920px] mx-auto px-8 py-12 space-y-12">
+        {/* Premium Header */}
         <div className="relative animate-fade-in">
-          <div className="absolute inset-0 gradient-sophisticated opacity-5 rounded-3xl blur-3xl" />
-          <div className="relative card-glass p-8 rounded-3xl border-2">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-orange-500/10 rounded-3xl blur-3xl" />
+          <Card className="relative premium-card p-10 rounded-3xl border-2 shadow-2xl bg-gradient-to-br from-white via-slate-50/50 to-white backdrop-blur-sm">
             <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-8">
                   <div className="relative">
-                    <div className="absolute inset-0 gradient-primary rounded-2xl blur-lg opacity-50 animate-glow" />
-                    <div className="relative p-4 gradient-primary text-white rounded-2xl shadow-2xl">
-                      <Building2 className="h-8 w-8" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-purple-600 to-orange-500 rounded-3xl blur-xl opacity-40 animate-pulse" />
+                    <div className="relative p-6 bg-gradient-to-r from-blue-600 via-purple-600 to-orange-500 text-white rounded-3xl shadow-2xl">
+                      <Building2 className="h-10 w-10" />
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <h1 className="text-elegant-heading">
-                      Membership Analytics
+                  <div className="space-y-2">
+                    <h1 className="text-5xl font-bold bg-gradient-to-r from-slate-900 via-blue-800 to-purple-800 bg-clip-text text-transparent">
+                      Premium Membership Analytics
                     </h1>
-                    <p className="text-refined text-xl">
-                      Advanced membership management & insights platform
+                    <p className="text-2xl text-slate-600 font-medium">
+                      Advanced insights & comprehensive member management platform
                     </p>
+                    <div className="flex items-center gap-4 mt-4">
+                      <div className="flex items-center gap-2 bg-emerald-100 text-emerald-800 px-4 py-2 rounded-full text-sm font-semibold">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                        Live Data
+                      </div>
+                      <div className="flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-semibold">
+                        <Sparkles className="h-4 w-4" />
+                        Premium Features
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
               
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4">
                 <ThemeToggle />
                 <Link to="/churn-analytics">
                   <Button 
                     variant="outline" 
-                    className="card-elevated border-destructive/20 hover:bg-destructive/5 text-destructive shadow-md hover:shadow-lg"
+                    size="lg"
+                    className="premium-card border-red-200 hover:bg-red-50 text-red-700 shadow-lg hover:shadow-xl font-semibold px-6"
                   >
-                    <TrendingDown className="h-4 w-4 mr-2" />
+                    <TrendingDown className="h-5 w-5 mr-2" />
                     Churn Analytics
                   </Button>
                 </Link>
                 <Button 
                   onClick={handleRefresh} 
                   variant="outline" 
-                  className="card-elevated hover:bg-accent/50 shadow-md hover:shadow-lg"
+                  size="lg"
+                  className="premium-card hover:bg-slate-50 shadow-lg hover:shadow-xl font-semibold px-6"
                 >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
+                  <RefreshCw className="h-5 w-5 mr-2" />
+                  Refresh Data
                 </Button>
                 <Button 
                   onClick={() => setIsFilterOpen(true)} 
-                  className="gradient-primary shadow-lg hover:shadow-xl animate-glow"
+                  size="lg"
+                  className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 hover:from-blue-700 hover:via-purple-700 hover:to-blue-900 shadow-xl hover:shadow-2xl font-semibold px-8"
                 >
-                  <Filter className="h-4 w-4 mr-2" />
+                  <Filter className="h-5 w-5 mr-2" />
                   Advanced Filters
                 </Button>
+                {(quickFilter !== 'all' || filters.status.length > 0 || filters.locations.length > 0) && (
+                  <Button 
+                    onClick={handleFiltersReset}
+                    variant="outline"
+                    size="lg"
+                    className="premium-card border-orange-200 hover:bg-orange-50 text-orange-700 shadow-lg hover:shadow-xl font-semibold px-6"
+                  >
+                    Clear Filters
+                  </Button>
+                )}
               </div>
             </div>
-          </div>
+          </Card>
         </div>
 
-        {/* Collapsible Filters */}
+        {/* Enhanced Collapsible Filters */}
         <div className="animate-slide-up">
           <CollapsibleFilters
             quickFilter={quickFilter}
@@ -322,9 +378,8 @@ const Index = () => {
           />
         </div>
 
-        {/* Sophisticated Metrics Grid */}
+        {/* Premium Metrics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-slide-up">
-          <div className="absolute inset-0 gradient-mesh opacity-20 rounded-3xl blur-3xl pointer-events-none" />
           <MetricCard
             title="Total Members"
             value={localMembershipData.length}
@@ -383,87 +438,82 @@ const Index = () => {
           />
         </div>
 
-        {/* Enhanced Chart */}
+        {/* Premium Charts */}
         <div className="animate-slide-up">
-          <MembershipChart data={filteredData} />
+          <PremiumCharts data={filteredData} />
         </div>
 
-        {/* Elegant Interactive Data Tables */}
+        {/* Enhanced Interactive Data Tables */}
         <div className="animate-slide-up">
           <Tabs defaultValue="overview" className="space-y-8">
             <div className="relative">
-              <div className="absolute inset-0 gradient-mesh opacity-10 rounded-2xl blur-2xl" />
-              <Card className="card-glass p-3 relative">
-                <TabsList className="grid w-full grid-cols-4 bg-background/50 gap-2 p-2 backdrop-blur-sm">
+              <Card className="premium-card p-4 shadow-lg">
+                <TabsList className="grid w-full grid-cols-4 bg-gradient-to-r from-slate-100 to-slate-200 gap-2 p-3 rounded-2xl">
                   <TabsTrigger 
                     value="overview" 
-                    className="data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg font-semibold transition-all duration-300 data-[state=active]:scale-105 hover:bg-accent/50"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
                   >
-                    <Activity className="h-4 w-4 mr-2" />
-                    Overview
+                    <Activity className="h-5 w-5 mr-2" />
+                    All Members ({filteredData.length})
                   </TabsTrigger>
                   <TabsTrigger 
                     value="active" 
-                    className="data-[state=active]:bg-success data-[state=active]:text-success-foreground data-[state=active]:shadow-lg font-semibold transition-all duration-300 data-[state=active]:scale-105 hover:bg-accent/50"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
                   >
-                    <UserCheck className="h-4 w-4 mr-2" />
-                    Active ({activeMembers.length})
+                    <UserCheck className="h-5 w-5 mr-2" />
+                    Active ({filteredData.filter(m => m.status === 'Active').length})
                   </TabsTrigger>
                   <TabsTrigger 
                     value="expired" 
-                    className="data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground data-[state=active]:shadow-lg font-semibold transition-all duration-300 data-[state=active]:scale-105 hover:bg-accent/50"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-red-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
                   >
-                    <UserX className="h-4 w-4 mr-2" />
-                    Expired ({expiredMembers.length})
+                    <UserX className="h-5 w-5 mr-2" />
+                    Expired ({filteredData.filter(m => m.status === 'Expired').length})
                   </TabsTrigger>
                   <TabsTrigger 
-                    value="sessions" 
-                    className="data-[state=active]:bg-warning data-[state=active]:text-warning-foreground data-[state=active]:shadow-lg font-semibold transition-all duration-300 data-[state=active]:scale-105 hover:bg-accent/50"
+                    value="premium" 
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
                   >
-                    <Dumbbell className="h-4 w-4 mr-2" />
-                    Sessions
+                    <Crown className="h-5 w-5 mr-2" />
+                    Premium ({filteredData.filter(m => m.membershipName?.toLowerCase().includes('unlimited') || m.membershipName?.toLowerCase().includes('premium')).length})
                   </TabsTrigger>
                 </TabsList>
               </Card>
             </div>
 
             <TabsContent value="overview" className="space-y-6">
-              <DataTable 
+              <EnhancedDataTable 
                 data={filteredData} 
-                title="All Members Overview"
+                title="Complete Member Overview"
                 onAnnotationUpdate={handleAnnotationUpdate}
               />
             </TabsContent>
 
             <TabsContent value="active" className="space-y-6">
-              <DataTable 
+              <EnhancedDataTable 
                 data={filteredData.filter(member => member.status === 'Active')} 
-                title="Active Members"
+                title="Active Members Dashboard"
                 onAnnotationUpdate={handleAnnotationUpdate}
               />
             </TabsContent>
 
             <TabsContent value="expired" className="space-y-6">
-              <DataTable 
+              <EnhancedDataTable 
                 data={filteredData.filter(member => member.status === 'Expired')} 
-                title="Expired Members"
+                title="Expired Members - Renewal Opportunities"
                 onAnnotationUpdate={handleAnnotationUpdate}
               />
             </TabsContent>
 
-            <TabsContent value="sessions" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <DataTable 
-                  data={filteredData.filter(member => member.sessionsLeft > 0)} 
-                  title="Members with Remaining Sessions"
-                  onAnnotationUpdate={handleAnnotationUpdate}
-                />
-                <DataTable 
-                  data={filteredData.filter(member => member.sessionsLeft === 0)} 
-                  title="Members with No Sessions"
-                  onAnnotationUpdate={handleAnnotationUpdate}
-                />
-              </div>
+            <TabsContent value="premium" className="space-y-6">
+              <EnhancedDataTable 
+                data={filteredData.filter(member => 
+                  member.membershipName?.toLowerCase().includes('unlimited') || 
+                  member.membershipName?.toLowerCase().includes('premium')
+                )} 
+                title="Premium & Unlimited Members"
+                onAnnotationUpdate={handleAnnotationUpdate}
+              />
             </TabsContent>
           </Tabs>
         </div>
@@ -474,8 +524,8 @@ const Index = () => {
           filters={filters}
           onFiltersChange={(newFilters) => {
             setFilters(newFilters);
-            // Reset quick filter when advanced filters are applied
             setQuickFilter('all');
+            toast.success("Advanced filters applied successfully");
           }}
           availableLocations={availableLocations}
           availableMembershipTypes={availableMembershipTypes}
