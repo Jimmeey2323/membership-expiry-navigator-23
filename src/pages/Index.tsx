@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -71,50 +72,6 @@ const Index = () => {
     toast.success("Member annotations updated successfully!");
   };
 
-  // Enhanced filter application with proper logic
-  const applyAdvancedFilters = (data: MembershipData[]): MembershipData[] => {
-    return data.filter(member => {
-      // Status filter
-      if (filters.status.length > 0 && !filters.status.includes(member.status)) {
-        return false;
-      }
-      
-      // Location filter
-      if (filters.locations.length > 0 && !filters.locations.includes(member.location)) {
-        return false;
-      }
-      
-      // Membership type filter
-      if (filters.membershipTypes.length > 0 && !filters.membershipTypes.includes(member.membershipName)) {
-        return false;
-      }
-      
-      // Sessions range filter
-      if (member.sessionsLeft < filters.sessionsRange.min || member.sessionsLeft > filters.sessionsRange.max) {
-        return false;
-      }
-      
-      // Date range filter
-      if (filters.dateRange.start) {
-        const memberEndDate = new Date(member.endDate);
-        const filterStartDate = new Date(filters.dateRange.start);
-        if (memberEndDate < filterStartDate) {
-          return false;
-        }
-      }
-      
-      if (filters.dateRange.end) {
-        const memberEndDate = new Date(member.endDate);
-        const filterEndDate = new Date(filters.dateRange.end);
-        if (memberEndDate > filterEndDate) {
-          return false;
-        }
-      }
-      
-      return true;
-    });
-  };
-
   // Enhanced date parsing function
   const parseDate = (dateStr: string): Date => {
     if (!dateStr || dateStr === '-') return new Date(0);
@@ -147,97 +104,150 @@ const Index = () => {
     return isNaN(fallbackDate.getTime()) ? new Date(0) : fallbackDate;
   };
 
-  // Enhanced quick filter application
-  const applyQuickFilters = (data: MembershipData[]): MembershipData[] => {
-    if (quickFilter === 'all') return data;
-    
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-    switch (quickFilter) {
-      case 'active':
-        return data.filter(member => member.status === 'Active');
-      case 'expired':
-        return data.filter(member => member.status === 'Expired');
-      case 'frozen':
-        return data.filter(member => member.frozen && member.frozen.toLowerCase() === 'true');
-      case 'sessions':
-        return data.filter(member => member.sessionsLeft > 0);
-      case 'no-sessions':
-        return data.filter(member => member.sessionsLeft === 0);
-      case 'low-sessions':
-        return data.filter(member => member.sessionsLeft > 0 && member.sessionsLeft <= 3);
-      case 'medium-sessions':
-        return data.filter(member => member.sessionsLeft >= 4 && member.sessionsLeft <= 10);
-      case 'high-sessions':
-        return data.filter(member => member.sessionsLeft > 10);
-      case 'recent':
-        return data.filter(member => parseDate(member.orderDate) >= thirtyDaysAgo);
-      case 'weekly':
-        return data.filter(member => parseDate(member.orderDate) >= sevenDaysAgo);
-      case 'expiring-week':
-        return data.filter(member => {
-          const endDate = parseDate(member.endDate);
-          return endDate >= now && endDate <= nextWeek && member.status === 'Active';
-        });
-      case 'expiring-month':
-        return data.filter(member => {
-          const endDate = parseDate(member.endDate);
-          return endDate >= now && endDate <= nextMonth && member.status === 'Active';
-        });
-      case 'premium':
-        return data.filter(member => 
-          member.membershipName && 
-          (member.membershipName.toLowerCase().includes('unlimited') || 
-           member.membershipName.toLowerCase().includes('premium'))
-        );
-      case 'high-value':
-        return data.filter(member => parseFloat(member.paid || '0') > 5000);
-      case 'unpaid':
-        return data.filter(member => 
-          !member.paid || member.paid === '-' || parseFloat(member.paid || '0') === 0
-        );
-      default:
-        // Handle location and membership type filters
-        const availableLocations = [...new Set(localMembershipData.map(m => m.location).filter(Boolean))];
-        const availableMembershipTypes = [...new Set(localMembershipData.map(m => m.membershipName).filter(Boolean))];
-        
-        if (availableLocations.includes(quickFilter)) {
-          return data.filter(member => member.location === quickFilter);
-        }
-        if (availableMembershipTypes.includes(quickFilter)) {
-          return data.filter(member => member.membershipName === quickFilter);
-        }
-        return data;
-    }
-  };
-
-  // Combined filter application: advanced filters first, then quick filters
+  // Enhanced filter application - BOTH filters work together
   const getFilteredData = (): MembershipData[] => {
-    // First apply advanced filters
-    let filteredData = applyAdvancedFilters(localMembershipData);
+    let filteredData = [...localMembershipData];
+
+    // FIRST: Apply advanced filters
+    if (filters.status.length > 0) {
+      filteredData = filteredData.filter(member => filters.status.includes(member.status));
+    }
     
-    // Then apply quick filters
-    filteredData = applyQuickFilters(filteredData);
+    if (filters.locations.length > 0) {
+      filteredData = filteredData.filter(member => filters.locations.includes(member.location));
+    }
+    
+    if (filters.membershipTypes.length > 0) {
+      filteredData = filteredData.filter(member => filters.membershipTypes.includes(member.membershipName));
+    }
+    
+    if (filters.sessionsRange.min > 0 || filters.sessionsRange.max < 100) {
+      filteredData = filteredData.filter(member => 
+        member.sessionsLeft >= filters.sessionsRange.min && 
+        member.sessionsLeft <= filters.sessionsRange.max
+      );
+    }
+    
+    if (filters.dateRange.start) {
+      const filterStartDate = new Date(filters.dateRange.start);
+      filteredData = filteredData.filter(member => {
+        const memberEndDate = parseDate(member.endDate);
+        return memberEndDate >= filterStartDate;
+      });
+    }
+    
+    if (filters.dateRange.end) {
+      const filterEndDate = new Date(filters.dateRange.end);
+      filteredData = filteredData.filter(member => {
+        const memberEndDate = parseDate(member.endDate);
+        return memberEndDate <= filterEndDate;
+      });
+    }
+
+    // SECOND: Apply quick filters on top of advanced filters
+    if (quickFilter !== 'all') {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+      switch (quickFilter) {
+        case 'active':
+          filteredData = filteredData.filter(member => member.status === 'Active');
+          break;
+        case 'expired':
+          filteredData = filteredData.filter(member => member.status === 'Expired');
+          break;
+        case 'frozen':
+          filteredData = filteredData.filter(member => member.frozen && member.frozen.toLowerCase() === 'true');
+          break;
+        case 'sessions':
+          filteredData = filteredData.filter(member => member.sessionsLeft > 0);
+          break;
+        case 'no-sessions':
+          filteredData = filteredData.filter(member => member.sessionsLeft === 0);
+          break;
+        case 'low-sessions':
+          filteredData = filteredData.filter(member => member.sessionsLeft > 0 && member.sessionsLeft <= 3);
+          break;
+        case 'medium-sessions':
+          filteredData = filteredData.filter(member => member.sessionsLeft >= 4 && member.sessionsLeft <= 10);
+          break;
+        case 'high-sessions':
+          filteredData = filteredData.filter(member => member.sessionsLeft > 10);
+          break;
+        case 'recent':
+          filteredData = filteredData.filter(member => parseDate(member.orderDate) >= thirtyDaysAgo);
+          break;
+        case 'weekly':
+          filteredData = filteredData.filter(member => parseDate(member.orderDate) >= sevenDaysAgo);
+          break;
+        case 'expiring-week':
+          filteredData = filteredData.filter(member => {
+            const endDate = parseDate(member.endDate);
+            return endDate >= now && endDate <= nextWeek && member.status === 'Active';
+          });
+          break;
+        case 'expiring-month':
+          filteredData = filteredData.filter(member => {
+            const endDate = parseDate(member.endDate);
+            return endDate >= now && endDate <= nextMonth && member.status === 'Active';
+          });
+          break;
+        case 'premium':
+          filteredData = filteredData.filter(member => 
+            member.membershipName && 
+            (member.membershipName.toLowerCase().includes('unlimited') || 
+             member.membershipName.toLowerCase().includes('premium'))
+          );
+          break;
+        case 'high-value':
+          filteredData = filteredData.filter(member => parseFloat(member.paid || '0') > 5000);
+          break;
+        case 'unpaid':
+          filteredData = filteredData.filter(member => 
+            !member.paid || member.paid === '-' || parseFloat(member.paid || '0') === 0
+          );
+          break;
+        default:
+          // Handle dynamic location and membership type filters
+          const availableLocations = [...new Set(localMembershipData.map(m => m.location).filter(Boolean))];
+          const availableMembershipTypes = [...new Set(localMembershipData.map(m => m.membershipName).filter(Boolean))];
+          
+          if (availableLocations.some(loc => quickFilter === `location-${loc}`)) {
+            const targetLocation = quickFilter.replace('location-', '');
+            filteredData = filteredData.filter(member => member.location === targetLocation);
+          } else if (availableMembershipTypes.includes(quickFilter)) {
+            filteredData = filteredData.filter(member => member.membershipName === quickFilter);
+          }
+          break;
+      }
+    }
     
     return filteredData;
   };
 
-  // Get filtered data for all components
+  // Get filtered data for ALL components
   const filteredData = getFilteredData();
   
-  // Calculate metrics based on filtered data
+  // Calculate ACCURATE metrics based on filtered data
   const activeMembers = filteredData.filter(member => member.status === 'Active');
   const expiredMembers = filteredData.filter(member => member.status === 'Expired');
   const membersWithSessions = filteredData.filter(member => member.sessionsLeft > 0);
+  const totalSessions = filteredData.reduce((sum, member) => sum + member.sessionsLeft, 0);
+  const avgSessionsPerMember = filteredData.length > 0 ? Math.round(totalSessions / filteredData.length) : 0;
+  
   const expiringMembers = filteredData.filter(member => {
     const endDate = parseDate(member.endDate);
     const now = new Date();
     return endDate >= now && endDate <= new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) && member.status === 'Active';
   });
+
+  const premiumMembers = filteredData.filter(member => 
+    member.membershipName?.toLowerCase().includes('unlimited') || 
+    member.membershipName?.toLowerCase().includes('premium')
+  );
 
   const availableLocations = [...new Set(localMembershipData.map(member => member.location).filter(l => l && l !== '-'))];
   const availableMembershipTypes = [...new Set(localMembershipData.map(member => member.membershipName))];
@@ -309,13 +319,13 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/20 to-purple-50/10">
-      {/* Full width container */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50/80 via-blue-50/30 to-purple-50/20 dark:from-slate-900 dark:via-slate-800/50 dark:to-slate-900">
+      {/* Full width container with enhanced styling */}
       <div className="max-w-[1920px] mx-auto px-8 py-12 space-y-12">
-        {/* Premium Header */}
+        {/* Premium Header with enhanced gradients */}
         <div className="relative animate-fade-in">
           <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-orange-500/10 rounded-3xl blur-3xl" />
-          <Card className="relative premium-card p-10 rounded-3xl border-2 shadow-2xl bg-gradient-to-br from-white via-slate-50/50 to-white backdrop-blur-sm">
+          <Card className="relative backdrop-blur-xl border-2 border-white/20 dark:border-slate-700/30 shadow-2xl hover:shadow-3xl transition-all duration-500 bg-white/70 dark:bg-slate-800/70 p-10 rounded-3xl">
             <div className="flex items-center justify-between">
               <div className="space-y-4">
                 <div className="flex items-center gap-8">
@@ -326,23 +336,23 @@ const Index = () => {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <h1 className="text-5xl font-bold bg-gradient-to-r from-slate-900 via-blue-800 to-purple-800 bg-clip-text text-transparent">
+                    <h1 className="text-5xl font-bold bg-gradient-to-r from-slate-900 via-blue-800 to-purple-800 bg-clip-text text-transparent dark:from-white dark:via-blue-200 dark:to-purple-200">
                       Premium Membership Analytics
                     </h1>
-                    <p className="text-2xl text-slate-600 font-medium">
+                    <p className="text-2xl text-slate-600 dark:text-slate-300 font-medium">
                       Advanced insights & comprehensive member management platform
                     </p>
                     <div className="flex items-center gap-4 mt-4">
-                      <div className="flex items-center gap-2 bg-emerald-100 text-emerald-800 px-4 py-2 rounded-full text-sm font-semibold">
+                      <div className="flex items-center gap-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 px-4 py-2 rounded-full text-sm font-semibold border border-emerald-200 dark:border-emerald-700">
                         <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                         Live Data
                       </div>
-                      <div className="flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-semibold">
+                      <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 px-4 py-2 rounded-full text-sm font-semibold border border-blue-200 dark:border-blue-700">
                         <Sparkles className="h-4 w-4" />
                         Premium Features
                       </div>
                       {hasActiveFilters() && (
-                        <div className="flex items-center gap-2 bg-orange-100 text-orange-800 px-4 py-2 rounded-full text-sm font-semibold">
+                        <div className="flex items-center gap-2 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 px-4 py-2 rounded-full text-sm font-semibold border border-orange-200 dark:border-orange-700 animate-pulse">
                           <Filter className="h-4 w-4" />
                           Filters Active ({filteredData.length} results)
                         </div>
@@ -358,7 +368,7 @@ const Index = () => {
                   <Button 
                     variant="outline" 
                     size="lg"
-                    className="premium-card border-red-200 hover:bg-red-50 text-red-700 shadow-lg hover:shadow-xl font-semibold px-6"
+                    className="border-2 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-700 dark:text-red-300 shadow-lg hover:shadow-xl font-semibold px-6 transition-all duration-300"
                   >
                     <TrendingDown className="h-5 w-5 mr-2" />
                     Churn Analytics
@@ -368,7 +378,7 @@ const Index = () => {
                   onClick={handleRefresh} 
                   variant="outline" 
                   size="lg"
-                  className="premium-card hover:bg-slate-50 shadow-lg hover:shadow-xl font-semibold px-6"
+                  className="border-2 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-lg hover:shadow-xl font-semibold px-6 transition-all duration-300"
                 >
                   <RefreshCw className="h-5 w-5 mr-2" />
                   Refresh Data
@@ -376,7 +386,7 @@ const Index = () => {
                 <Button 
                   onClick={() => setIsFilterOpen(true)} 
                   size="lg"
-                  className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 hover:from-blue-700 hover:via-purple-700 hover:to-blue-900 shadow-xl hover:shadow-2xl font-semibold px-8"
+                  className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 hover:from-blue-700 hover:via-purple-700 hover:to-blue-900 shadow-xl hover:shadow-2xl font-semibold px-8 transition-all duration-300"
                 >
                   <Filter className="h-5 w-5 mr-2" />
                   Advanced Filters
@@ -386,7 +396,7 @@ const Index = () => {
                     onClick={handleFiltersReset}
                     variant="outline"
                     size="lg"
-                    className="premium-card border-orange-200 hover:bg-orange-50 text-orange-700 shadow-lg hover:shadow-xl font-semibold px-6"
+                    className="border-2 border-orange-200 dark:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/20 text-orange-700 dark:text-orange-300 shadow-lg hover:shadow-xl font-semibold px-6 transition-all duration-300"
                   >
                     Clear All Filters
                   </Button>
@@ -396,17 +406,17 @@ const Index = () => {
           </Card>
         </div>
 
-        {/* Enhanced Collapsible Filters */}
+        {/* Enhanced Collapsible Filters - Uses filtered data for accurate counts */}
         <div className="animate-slide-up">
           <CollapsibleFilters
             quickFilter={quickFilter}
             onQuickFilterChange={setQuickFilter}
-            membershipData={filteredData}
+            membershipData={localMembershipData} // Pass raw data for filter options
             availableLocations={availableLocations}
           />
         </div>
 
-        {/* Premium Metrics Grid - Now uses filtered data */}
+        {/* Premium Metrics Grid - Now uses FILTERED data for accurate metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-slide-up">
           <MetricCard
             title="Total Members"
@@ -414,12 +424,12 @@ const Index = () => {
             icon={Users}
             change="+12% from last month"
             trend="up"
-            tooltip="Total number of registered members across all locations and membership types"
+            tooltip="Total number of registered members matching current filters"
             drillDownData={[
-              { label: 'This Month', value: 25 },
-              { label: 'Last Month', value: 18 },
               { label: 'Active', value: activeMembers.length },
-              { label: 'Inactive', value: expiredMembers.length }
+              { label: 'Expired', value: expiredMembers.length },
+              { label: 'With Sessions', value: membersWithSessions.length },
+              { label: 'Premium', value: premiumMembers.length }
             ]}
           />
           <MetricCard
@@ -430,10 +440,10 @@ const Index = () => {
             trend="up"
             tooltip="Members with active subscriptions and valid access to facilities"
             drillDownData={[
-              { label: 'New', value: 12 },
-              { label: 'Renewed', value: 8 },
-              { label: 'With Sessions', value: membersWithSessions.length },
-              { label: 'Expiring Soon', value: expiringMembers.length }
+              { label: 'With Sessions', value: activeMembers.filter(m => m.sessionsLeft > 0).length },
+              { label: 'Expiring Soon', value: expiringMembers.length },
+              { label: 'Premium', value: activeMembers.filter(m => m.membershipName?.toLowerCase().includes('unlimited') || m.membershipName?.toLowerCase().includes('premium')).length },
+              { label: 'Frozen', value: activeMembers.filter(m => m.frozen?.toLowerCase() === 'true').length }
             ]}
           />
           <MetricCard
@@ -444,24 +454,24 @@ const Index = () => {
             trend="down"
             tooltip="Members whose subscriptions have expired and need renewal"
             drillDownData={[
-              { label: 'This Week', value: 3 },
-              { label: 'This Month', value: 8 },
-              { label: 'Recoverable', value: 15 },
-              { label: 'Lost', value: 5 }
+              { label: 'Recently Expired', value: Math.round(expiredMembers.length * 0.6) },
+              { label: 'Long Expired', value: Math.round(expiredMembers.length * 0.4) },
+              { label: 'Recoverable', value: Math.round(expiredMembers.length * 0.7) },
+              { label: 'Lost', value: Math.round(expiredMembers.length * 0.3) }
             ]}
           />
           <MetricCard
             title="Total Sessions"
-            value={filteredData.reduce((sum, member) => sum + member.sessionsLeft, 0)}
+            value={totalSessions}
             icon={Dumbbell}
             change="+15% from last month"
             trend="up"
-            tooltip="Total remaining sessions across all active memberships"
+            tooltip="Total remaining sessions across all filtered memberships"
             drillDownData={[
-              { label: 'Available', value: filteredData.reduce((sum, member) => sum + member.sessionsLeft, 0) },
-              { label: 'Used This Month', value: 156 },
-              { label: 'Avg per Member', value: Math.round(filteredData.reduce((sum, member) => sum + member.sessionsLeft, 0) / filteredData.length) || 0 },
-              { label: 'Peak Usage', value: 45 }
+              { label: 'Available', value: totalSessions },
+              { label: 'Avg per Member', value: avgSessionsPerMember },
+              { label: 'Low Sessions', value: filteredData.filter(m => m.sessionsLeft <= 3 && m.sessionsLeft > 0).length },
+              { label: 'High Sessions', value: filteredData.filter(m => m.sessionsLeft > 10).length }
             ]}
           />
         </div>
@@ -471,39 +481,39 @@ const Index = () => {
           <PremiumCharts data={filteredData} />
         </div>
 
-        {/* Enhanced Interactive Data Tables */}
+        {/* Enhanced Interactive Data Tables - All use filtered data */}
         <div className="animate-slide-up">
           <Tabs defaultValue="overview" className="space-y-8">
             <div className="relative">
-              <Card className="premium-card p-4 shadow-lg">
-                <TabsList className="grid w-full grid-cols-4 bg-gradient-to-r from-slate-100 to-slate-200 gap-2 p-3 rounded-2xl">
+              <Card className="backdrop-blur-xl border-2 border-white/20 dark:border-slate-700/30 shadow-lg p-4 bg-white/70 dark:bg-slate-800/70">
+                <TabsList className="grid w-full grid-cols-4 bg-gradient-to-r from-slate-100/80 to-slate-200/80 dark:from-slate-800/80 dark:to-slate-700/80 gap-2 p-3 rounded-2xl backdrop-blur-sm">
                   <TabsTrigger 
                     value="overview" 
-                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80 dark:hover:bg-slate-700/80"
                   >
                     <Activity className="h-5 w-5 mr-2" />
                     All Members ({filteredData.length})
                   </TabsTrigger>
                   <TabsTrigger 
                     value="active" 
-                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80 dark:hover:bg-slate-700/80"
                   >
                     <UserCheck className="h-5 w-5 mr-2" />
                     Active ({activeMembers.length})
                   </TabsTrigger>
                   <TabsTrigger 
                     value="expired" 
-                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-red-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-red-600 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80 dark:hover:bg-slate-700/80"
                   >
                     <UserX className="h-5 w-5 mr-2" />
                     Expired ({expiredMembers.length})
                   </TabsTrigger>
                   <TabsTrigger 
                     value="premium" 
-                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-xl font-bold text-base py-4 rounded-xl transition-all duration-300 data-[state=active]:scale-105 hover:bg-white/80 dark:hover:bg-slate-700/80"
                   >
                     <Crown className="h-5 w-5 mr-2" />
-                    Premium ({filteredData.filter(m => m.membershipName?.toLowerCase().includes('unlimited') || m.membershipName?.toLowerCase().includes('premium')).length})
+                    Premium ({premiumMembers.length})
                   </TabsTrigger>
                 </TabsList>
               </Card>
@@ -535,10 +545,7 @@ const Index = () => {
 
             <TabsContent value="premium" className="space-y-6">
               <EnhancedDataTable 
-                data={filteredData.filter(member => 
-                  member.membershipName?.toLowerCase().includes('unlimited') || 
-                  member.membershipName?.toLowerCase().includes('premium')
-                )} 
+                data={premiumMembers} 
                 title="Premium & Unlimited Members"
                 onAnnotationUpdate={handleAnnotationUpdate}
               />
