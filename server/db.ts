@@ -4,29 +4,40 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-// Simple configuration that should work
-export const pool = new Pool({
-  connectionString: "postgresql://postgres:admin123@db.brumbzbtvqkslzhlpsxh.supabase.co:5432/postgres",
-  ssl: {
-    rejectUnauthorized: false
-  },
-  max: 10,
-  connectionTimeoutMillis: 5000,
-  idleTimeoutMillis: 10000,
-});
+// Only connect to database if connection string is provided via environment variable
+const connectionString = process.env.DATABASE_URL;
 
-export const db = drizzle(pool, { schema });
+let pool: pg.Pool | null = null;
+let db: ReturnType<typeof drizzle> | null = null;
 
-// Simple connection test
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error('Database connection failed:', err.message);
-  } else {
-    console.log('✅ Database connected successfully');
-    release();
-  }
-});
+if (connectionString) {
+  pool = new Pool({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false
+    },
+    max: 10,
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 10000,
+  });
 
-pool.on('error', (err) => {
-  console.error('Database pool error:', err);
-});
+  db = drizzle(pool, { schema });
+
+  // Simple connection test
+  pool.connect((err, client, release) => {
+    if (err) {
+      console.error('Database connection failed:', err.message);
+    } else {
+      console.log('✅ Database connected successfully');
+      release();
+    }
+  });
+
+  pool.on('error', (err) => {
+    console.error('Database pool error:', err);
+  });
+} else {
+  console.warn('⚠️ DATABASE_URL not set - database features disabled');
+}
+
+export { pool, db };

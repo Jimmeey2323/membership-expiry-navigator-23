@@ -2,6 +2,11 @@ import { db } from "./db";
 import { studios, teams, categories, subcategories } from "@shared/schema";
 
 async function seed() {
+  if (!db) {
+    console.error("Database not configured. Set DATABASE_URL environment variable.");
+    process.exit(1);
+  }
+
   console.log("Seeding database...");
 
   const studioData = [

@@ -117,14 +117,23 @@ function generateTicketNumber(): string {
   return `TKT-${year}${month}-${random}`;
 }
 
+function requireDb() {
+  if (!db) {
+    throw new Error("Database not configured. Set DATABASE_URL environment variable.");
+  }
+  return db;
+}
+
 export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+    const database = requireDb();
+    const [user] = await database.select().from(users).where(eq(users.id, id));
     return user;
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
+    const database = requireDb();
+    const [user] = await database
       .insert(users)
       .values(userData)
       .onConflictDoUpdate({
@@ -139,74 +148,89 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUsers(): Promise<User[]> {
-    return await db.select().from(users).where(eq(users.isActive, true));
+    const database = requireDb();
+    return await database.select().from(users).where(eq(users.isActive, true));
   }
 
   async getTeams(): Promise<Team[]> {
-    return await db.select().from(teams).where(eq(teams.isActive, true));
+    const database = requireDb();
+    return await database.select().from(teams).where(eq(teams.isActive, true));
   }
 
   async getTeam(id: string): Promise<Team | undefined> {
-    const [team] = await db.select().from(teams).where(eq(teams.id, id));
+    const database = requireDb();
+    const [team] = await database.select().from(teams).where(eq(teams.id, id));
     return team;
   }
 
   async createTeam(team: InsertTeam): Promise<Team> {
-    const [newTeam] = await db.insert(teams).values(team).returning();
+    const database = requireDb();
+    const [newTeam] = await database.insert(teams).values(team).returning();
     return newTeam;
   }
 
   async updateTeam(id: string, team: Partial<InsertTeam>): Promise<Team | undefined> {
-    const [updated] = await db.update(teams).set(team).where(eq(teams.id, id)).returning();
+    const database = requireDb();
+    const [updated] = await database.update(teams).set(team).where(eq(teams.id, id)).returning();
     return updated;
   }
 
   async getStudios(): Promise<Studio[]> {
-    return await db.select().from(studios).where(eq(studios.isActive, true));
+    const database = requireDb();
+    return await database.select().from(studios).where(eq(studios.isActive, true));
   }
 
   async getStudio(id: string): Promise<Studio | undefined> {
-    const [studio] = await db.select().from(studios).where(eq(studios.id, id));
+    const database = requireDb();
+    const [studio] = await database.select().from(studios).where(eq(studios.id, id));
     return studio;
   }
 
   async createStudio(studio: InsertStudio): Promise<Studio> {
-    const [newStudio] = await db.insert(studios).values(studio).returning();
+    const database = requireDb();
+    const [newStudio] = await database.insert(studios).values(studio).returning();
     return newStudio;
   }
 
   async updateStudio(id: string, studio: Partial<InsertStudio>): Promise<Studio | undefined> {
-    const [updated] = await db.update(studios).set(studio).where(eq(studios.id, id)).returning();
+    const database = requireDb();
+    const [updated] = await database.update(studios).set(studio).where(eq(studios.id, id)).returning();
     return updated;
   }
 
   async getCategories(): Promise<Category[]> {
-    return await db.select().from(categories).where(eq(categories.isActive, true)).orderBy(categories.sortOrder);
+    const database = requireDb();
+    return await database.select().from(categories).where(eq(categories.isActive, true)).orderBy(categories.sortOrder);
   }
 
   async getCategory(id: string): Promise<Category | undefined> {
-    const [category] = await db.select().from(categories).where(eq(categories.id, id));
+    const database = requireDb();
+    const [category] = await database.select().from(categories).where(eq(categories.id, id));
     return category;
   }
 
   async createCategory(category: InsertCategory): Promise<Category> {
-    const [newCategory] = await db.insert(categories).values(category).returning();
+    const database = requireDb();
+    const [newCategory] = await database.insert(categories).values(category).returning();
     return newCategory;
   }
 
   async getSubcategories(categoryId?: string): Promise<Subcategory[]> {
+    const database = requireDb();
     if (categoryId) {
-      return await db.select().from(subcategories).where(and(eq(subcategories.categoryId, categoryId), eq(subcategories.isActive, true))).orderBy(subcategories.sortOrder);
+      return await database.select().from(subcategories).where(and(eq(subcategories.categoryId, categoryId), eq(subcategories.isActive, true))).orderBy(subcategories.sortOrder);
     }
-    return await db.select().from(subcategories).where(eq(subcategories.isActive, true)).orderBy(subcategories.sortOrder);
+    return await database.select().from(subcategories).where(eq(subcategories.isActive, true)).orderBy(subcategories.sortOrder);
   }
 
   async getSubcategory(id: string): Promise<Subcategory | undefined> {
-    const [subcategory] = await db.select().from(subcategories).where(eq(subcategories.id, id));
+    const database = requireDb();
+    const [subcategory] = await database.select().from(subcategories).where(eq(subcategories.id, id));
     return subcategory;
   }
 
   async getTickets(filters?: TicketFilters): Promise<Ticket[]> {
+    const database = requireDb();
     const conditions: any[] = [];
 
     if (filters?.status) {
@@ -226,7 +250,7 @@ export class DatabaseStorage implements IStorage {
       }
     }
     if (filters?.category) {
-      conditions.push(eq(tickets.category, filters.category));
+      conditions.push(eq(tickets.categoryId, filters.category));
     }
     if (filters?.studioId) {
       conditions.push(eq(tickets.studioId, filters.studioId));
@@ -244,7 +268,7 @@ export class DatabaseStorage implements IStorage {
       );
     }
 
-    let query = db.select().from(tickets);
+    let query = database.select().from(tickets);
     
     if (conditions.length > 0) {
       query = query.where(and(...conditions)) as any;
@@ -263,79 +287,95 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTicket(id: string): Promise<Ticket | undefined> {
-    const [ticket] = await db.select().from(tickets).where(eq(tickets.id, id));
+    const database = requireDb();
+    const [ticket] = await database.select().from(tickets).where(eq(tickets.id, id));
     return ticket;
   }
 
   async getTicketByNumber(ticketNumber: string): Promise<Ticket | undefined> {
-    const [ticket] = await db.select().from(tickets).where(eq(tickets.ticketNumber, ticketNumber));
+    const database = requireDb();
+    const [ticket] = await database.select().from(tickets).where(eq(tickets.ticketNumber, ticketNumber));
     return ticket;
   }
 
   async createTicket(ticket: InsertTicket): Promise<Ticket> {
+    const database = requireDb();
     const ticketNumber = generateTicketNumber();
-    const [newTicket] = await db.insert(tickets).values({ ...ticket, ticketNumber }).returning();
+    const [newTicket] = await database.insert(tickets).values({ ...ticket, ticketNumber }).returning();
     return newTicket;
   }
 
   async updateTicket(id: string, ticket: Partial<InsertTicket>): Promise<Ticket | undefined> {
-    const [updated] = await db.update(tickets).set({ ...ticket, updatedAt: new Date() }).where(eq(tickets.id, id)).returning();
+    const database = requireDb();
+    const [updated] = await database.update(tickets).set({ ...ticket, updatedAt: new Date() }).where(eq(tickets.id, id)).returning();
     return updated;
   }
 
   async deleteTicket(id: string): Promise<boolean> {
-    const result = await db.delete(tickets).where(eq(tickets.id, id));
+    const database = requireDb();
+    await database.delete(tickets).where(eq(tickets.id, id));
     return true;
   }
 
   async getTicketComments(ticketId: string): Promise<TicketComment[]> {
-    return await db.select().from(ticketComments).where(eq(ticketComments.ticketId, ticketId)).orderBy(desc(ticketComments.createdAt));
+    const database = requireDb();
+    return await database.select().from(ticketComments).where(eq(ticketComments.ticketId, ticketId)).orderBy(desc(ticketComments.createdAt));
   }
 
   async createTicketComment(comment: InsertTicketComment): Promise<TicketComment> {
-    const [newComment] = await db.insert(ticketComments).values(comment).returning();
+    const database = requireDb();
+    const [newComment] = await database.insert(ticketComments).values(comment).returning();
     return newComment;
   }
 
   async getTicketAttachments(ticketId: string): Promise<TicketAttachment[]> {
-    return await db.select().from(ticketAttachments).where(eq(ticketAttachments.ticketId, ticketId));
+    const database = requireDb();
+    return await database.select().from(ticketAttachments).where(eq(ticketAttachments.ticketId, ticketId));
   }
 
   async createTicketAttachment(attachment: InsertTicketAttachment): Promise<TicketAttachment> {
-    const [newAttachment] = await db.insert(ticketAttachments).values(attachment).returning();
+    const database = requireDb();
+    const [newAttachment] = await database.insert(ticketAttachments).values(attachment).returning();
     return newAttachment;
   }
 
   async getTicketHistory(ticketId: string): Promise<TicketHistory[]> {
-    return await db.select().from(ticketHistory).where(eq(ticketHistory.ticketId, ticketId)).orderBy(desc(ticketHistory.createdAt));
+    const database = requireDb();
+    return await database.select().from(ticketHistory).where(eq(ticketHistory.ticketId, ticketId)).orderBy(desc(ticketHistory.createdAt));
   }
 
   async createTicketHistory(history: { ticketId: string; changedByUserId?: string; action: string; fieldChanged?: string; oldValue?: string; newValue?: string }): Promise<TicketHistory> {
-    const [newHistory] = await db.insert(ticketHistory).values(history).returning();
+    const database = requireDb();
+    const [newHistory] = await database.insert(ticketHistory).values(history).returning();
     return newHistory;
   }
 
   async getNotifications(userId: string): Promise<Notification[]> {
-    return await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+    const database = requireDb();
+    return await database.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
   }
 
   async createNotification(notification: InsertNotification): Promise<Notification> {
-    const [newNotification] = await db.insert(notifications).values(notification).returning();
+    const database = requireDb();
+    const [newNotification] = await database.insert(notifications).values(notification).returning();
     return newNotification;
   }
 
   async markNotificationRead(id: string): Promise<Notification | undefined> {
-    const [updated] = await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id)).returning();
+    const database = requireDb();
+    const [updated] = await database.update(notifications).set({ isRead: true }).where(eq(notifications.id, id)).returning();
     return updated;
   }
 
   async deleteNotification(id: string): Promise<boolean> {
-    await db.delete(notifications).where(eq(notifications.id, id));
+    const database = requireDb();
+    await database.delete(notifications).where(eq(notifications.id, id));
     return true;
   }
 
   async getDashboardStats(): Promise<DashboardStats> {
-    const allTickets = await db.select().from(tickets);
+    const database = requireDb();
+    const allTickets = await database.select().from(tickets);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -380,8 +420,8 @@ export class DatabaseStorage implements IStorage {
 
     const categoryCount: Record<string, number> = {};
     allTickets.forEach(t => {
-      if (t.category) {
-        categoryCount[t.category] = (categoryCount[t.category] || 0) + 1;
+      if (t.categoryId) {
+        categoryCount[t.categoryId] = (categoryCount[t.categoryId] || 0) + 1;
       }
     });
     const byCategory = Object.entries(categoryCount)
@@ -410,7 +450,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAnalyticsData(): Promise<AnalyticsData> {
-    const allTickets = await db.select().from(tickets);
+    const database = requireDb();
+    const allTickets = await database.select().from(tickets);
     const allStudios = await this.getStudios();
     const allTeams = await this.getTeams();
 
@@ -419,8 +460,8 @@ export class DatabaseStorage implements IStorage {
     const teamCount: Record<string, number> = {};
 
     allTickets.forEach(t => {
-      if (t.category) {
-        categoryCount[t.category] = (categoryCount[t.category] || 0) + 1;
+      if (t.categoryId) {
+        categoryCount[t.categoryId] = (categoryCount[t.categoryId] || 0) + 1;
       }
       if (t.studioId) {
         const studio = allStudios.find(s => s.id === t.studioId);

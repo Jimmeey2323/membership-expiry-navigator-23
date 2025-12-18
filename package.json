@@ -4,7 +4,8 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "NODE_ENV=development tsx server/index.ts",
+    "dev": "NODE_ENV=development NODE_OPTIONS=--dns-result-order=ipv4first tsx server/index.ts",
+    "build:dev": "vite build --mode development",
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
@@ -55,6 +56,7 @@
     "express-session": "^1.18.1",
     "framer-motion": "^11.18.2",
     "input-otp": "^1.4.2",
+    "lovable-tagger": "^1.1.13",
     "lucide-react": "^0.453.0",
     "memoizee": "^0.4.17",
     "memorystore": "^1.6.7",
